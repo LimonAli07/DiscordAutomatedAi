@@ -12,7 +12,7 @@ class Config:
     
     def __init__(self):
         self.discord_bot_token = os.getenv("DISCORD_BOT_TOKEN")
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.discord_owner_id = os.getenv("DISCORD_OWNER_ID")
         
         # Validate required environment variables
@@ -25,8 +25,8 @@ class Config:
         if not self.discord_bot_token:
             missing_vars.append("DISCORD_BOT_TOKEN")
         
-        if not self.gemini_api_key:
-            missing_vars.append("GEMINI_API_KEY")
+        if not self.openai_api_key:
+            missing_vars.append("OPENAI_API_KEY")
         
         if not self.discord_owner_id:
             missing_vars.append("DISCORD_OWNER_ID")
@@ -45,7 +45,7 @@ class Config:
         """Check if configuration is valid."""
         return all([
             self.discord_bot_token,
-            self.gemini_api_key,
+            self.openai_api_key,
             self.discord_owner_id
         ])
 

@@ -3,8 +3,7 @@ import logging
 import asyncio
 import discord
 from typing import Dict, Any, List, Optional, Callable
-import google.generativeai as genai
-from google.generativeai import types
+from openai import OpenAI
 from pydantic import BaseModel
 
 from config import config
@@ -23,10 +22,13 @@ class DiscordAgent:
     def __init__(self, bot: discord.Client):
         self.bot = bot
         self.discord_tools = DiscordTools(bot)
-        genai.configure(api_key=config.gemini_api_key)
+        self.client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=config.openai_api_key
+        )
         self.pending_confirmations: Dict[int, Dict[str, Any]] = {}
         
-        # Build the function schema for Gemini
+        # Build the function schema for OpenAI
         self.function_schemas = self._build_function_schemas()
     
     def _build_function_schemas(self) -> List[Dict[str, Any]]:
@@ -168,8 +170,8 @@ Be helpful and provide clear feedback about what actions you're taking.
 
 IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If you need to use a dangerous function, explain what you're about to do clearly."""
             
-            # Start conversation with Gemini
-            response = await self._call_gemini_with_tools(system_prompt, user_prompt, message)
+            # Start conversation with OpenAI
+            response = await self._call_openai_with_tools(system_prompt, user_prompt, message)
             
             return response
             
@@ -177,9 +179,9 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
             logger.error(f"Error processing command: {e}")
             return f"An error occurred while processing your request: {str(e)}"
     
-    async def _call_gemini_with_tools(self, system_prompt: str, user_prompt: str, message: discord.Message) -> str:
+    async def _call_openai_with_tools(self, system_prompt: str, user_prompt: str, message: discord.Message) -> str:
         """
-        Call Gemini API with function calling capabilities.
+        Call OpenAI API (via OpenRouter) with function calling capabilities.
         
         Args:
             system_prompt (str): The system instruction
@@ -189,49 +191,47 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
             str: The final response from the AI
         """
         try:
-            # Convert function schemas to tool declarations for older API
+            # Convert function schemas to OpenAI tools format
             tools = []
             for schema in self.function_schemas:
                 tools.append({
-                    "function_declarations": [{
+                    "type": "function",
+                    "function": {
                         "name": schema["name"],
                         "description": schema["description"],
                         "parameters": schema["parameters"]
-                    }]
+                    }
                 })
             
-            # Create the model
-            model = genai.GenerativeModel(
-                model_name="gemini-1.5-pro",
-                system_instruction=system_prompt,
-                tools=tools
+            # Make the initial request to DeepSeek via OpenRouter
+            response = self.client.chat.completions.create(
+                model="deepseek/deepseek-chat-v3-0324:free",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                tools=tools,
+                tool_choice="auto"
             )
             
-            # Make the initial request
-            response = model.generate_content(user_prompt)
-            
-            if not response.candidates:
-                return "I'm sorry, I couldn't process your request. Please try again."
-            
-            candidate = response.candidates[0]
+            message_content = response.choices[0].message
             
             # Check if AI wants to call functions
-            function_calls = []
-            text_response = ""
-            
-            for part in candidate.content.parts:
-                if hasattr(part, 'function_call') and part.function_call:
-                    function_calls.append(part.function_call)
-                elif hasattr(part, 'text') and part.text:
-                    text_response += part.text
-            
-            if function_calls:
-                # Execute function calls
+            if hasattr(message_content, 'tool_calls') and message_content.tool_calls:
                 function_responses = []
                 
-                for func_call in function_calls:
-                    function_name = func_call.name
-                    function_args = dict(func_call.args) if func_call.args else {}
+                for tool_call in message_content.tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = {}
+                    
+                    # Parse function arguments
+                    if tool_call.function.arguments:
+                        try:
+                            import json
+                            function_args = json.loads(tool_call.function.arguments)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error parsing function arguments: {e}")
+                            continue
                     
                     # Check if this is a dangerous function
                     if function_name in DANGEROUS_FUNCTIONS:
@@ -241,10 +241,9 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
                         
                         if not confirmation_result["confirmed"]:
                             function_responses.append({
-                                "function_response": {
-                                    "name": function_name,
-                                    "response": {"error": confirmation_result["message"]}
-                                }
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "content": f"Error: {confirmation_result['message']}"
                             })
                             continue
                     
@@ -252,53 +251,41 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
                     try:
                         result = await self._execute_function(function_name, function_args)
                         function_responses.append({
-                            "function_response": {
-                                "name": function_name,
-                                "response": {"result": result}
-                            }
+                            "tool_call_id": tool_call.id,
+                            "role": "tool", 
+                            "content": result
                         })
                     except Exception as e:
                         logger.error(f"Error executing function {function_name}: {e}")
                         function_responses.append({
-                            "function_response": {
-                                "name": function_name,
-                                "response": {"error": str(e)}
-                            }
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "content": f"Error: {str(e)}"
                         })
                 
-                # Send function results back to Gemini for final response
+                # Send function results back to get final response
                 if function_responses:
-                    # Build the conversation history for the older API
-                    chat_history = [
-                        {"role": "user", "parts": [{"text": user_prompt}]},
-                        {"role": "model", "parts": [{"text": text_response}] + [{"function_call": fc} for fc in function_calls]},
-                        {"role": "function", "parts": function_responses}
+                    messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                        message_content,
+                        *function_responses
                     ]
                     
-                    try:
-                        final_response = model.generate_content(chat_history)
-                        
-                        if final_response.candidates and final_response.candidates[0].content:
-                            final_text = ""
-                            for part in final_response.candidates[0].content.parts:
-                                if hasattr(part, 'text') and part.text:
-                                    final_text += part.text
-                            return final_text or "Task completed successfully."
-                    except Exception as e:
-                        logger.error(f"Error generating final response: {e}")
-                        # Return a summary of the function results
-                        results_summary = []
-                        for resp in function_responses:
-                            if "result" in resp["function_response"]["response"]:
-                                results_summary.append(resp["function_response"]["response"]["result"])
-                        return "\n".join(results_summary) if results_summary else "Task completed successfully."
+                    final_response = self.client.chat.completions.create(
+                        model="deepseek/deepseek-chat-v3-0324:free",
+                        messages=messages
+                    )
+                    
+                    return final_response.choices[0].message.content or "Task completed successfully."
                 
                 return "Task completed successfully."
             
-            return text_response or "I'm sorry, I couldn't process your request. Please try again."
+            # No function calls, return the text response
+            return message_content.content or "I'm sorry, I couldn't process your request. Please try again."
             
         except Exception as e:
-            logger.error(f"Error calling Gemini API: {e}")
+            logger.error(f"Error calling OpenAI API: {e}")
             return f"An error occurred while processing your request: {str(e)}"
     
     async def _execute_function(self, function_name: str, function_args: Dict[str, Any]) -> str:
