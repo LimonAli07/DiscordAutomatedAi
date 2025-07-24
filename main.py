@@ -77,6 +77,11 @@ class DiscordBot(discord.Client):
             # Update user session to current guild
             if message.guild:
                 self.user_sessions[message.author.id] = message.guild.id
+            
+            # Clear any pending confirmations when starting new command
+            if hasattr(self.ai_agent, 'pending_confirmations') and message.author.id in self.ai_agent.pending_confirmations:
+                del self.ai_agent.pending_confirmations[message.author.id]
+                
             await self.handle_askai_command(message)
     
     async def handle_askai_command(self, message):

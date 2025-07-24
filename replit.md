@@ -27,6 +27,13 @@ Preferred communication style: Simple, everyday language.
 - Added safety confirmation for cross-server clone operations
 - Enhanced Discord tools with cross-server data management
 
+**July 24, 2025 - Improved Confirmation System**
+- Replaced text-based confirmations with emoji reactions (✅/❌)
+- Extended confirmation timeout to 90 seconds for better usability
+- New ¬askai command clears previous confirmations to start fresh tasks
+- Simplified confirmation messages with clear operation descriptions
+- Enhanced user experience with visual feedback on confirmation status
+
 ## System Architecture
 
 ### Core Design Pattern

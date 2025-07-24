@@ -267,6 +267,10 @@ class DiscordAgent:
             # Store current user for cross-server operations
             self._current_user_id = user_id
             
+            # Clear any pending confirmations when starting new command
+            if user_id in self.pending_confirmations:
+                del self.pending_confirmations[user_id]
+            
             # Create the system prompt with context
             system_prompt = f"""You are a Discord server management AI assistant. You have access to various Discord server management functions.
 
@@ -390,7 +394,12 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
                         messages=messages
                     )
                     
-                    return final_response.choices[0].message.content or "Task completed successfully."
+                    response_text = final_response.choices[0].message.content
+                    # Avoid duplicate responses by being concise
+                    if response_text and len(response_text.strip()) > 0:
+                        return response_text.strip()
+                    else:
+                        return "Task completed successfully."
                 
                 return "Task completed successfully."
             
@@ -438,60 +447,68 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
         Returns:
             Dict[str, Any]: Confirmation result with 'confirmed' and 'message' keys
         """
+        # Create a readable description of the function call
+        description = self._format_function_description(function_name, function_args)
+        
         confirmation_message = (
-            f"**⚠️ CONFIRMATION REQUIRED ⚠️**\n\n"
-            f"I am about to execute `{function_name}` with arguments:\n"
-            f"```json\n{json.dumps(function_args, indent=2)}\n```\n\n"
-            f"This action may be irreversible. Do you want to proceed?\n"
-            f"Reply with **yes** to confirm, or anything else to cancel.\n"
-            f"You have 60 seconds to respond."
+            f"⚠️ **DANGEROUS OPERATION** ⚠️\n\n"
+            f"About to: {description}\n\n"
+            f"React with ✅ to confirm or ❌ to cancel (90 seconds)"
         )
         
         # Send confirmation message
-        await channel.send(confirmation_message)
+        confirmation_msg = await channel.send(confirmation_message)
         
-        # Store pending confirmation
-        self.pending_confirmations[owner_id] = {
-            "function_name": function_name,
-            "function_args": function_args,
-            "channel": channel,
-            "timestamp": asyncio.get_event_loop().time()
-        }
+        # Add reaction options
+        await confirmation_msg.add_reaction("✅")
+        await confirmation_msg.add_reaction("❌")
         
-        # Wait for response with timeout
+        def check(reaction, user):
+            return (user.id == owner_id and 
+                   reaction.message.id == confirmation_msg.id and
+                   str(reaction.emoji) in ["✅", "❌"])
+        
         try:
-            def check(message):
-                return (message.author.id == owner_id and 
-                       message.channel == channel and
-                       owner_id in self.pending_confirmations)
+            reaction, user = await self.bot.wait_for('reaction_add', check=check, timeout=90.0)
             
-            response_message = await self.bot.wait_for('message', check=check, timeout=60.0)
-            
-            # Process the response
-            response = response_message.content.lower().strip()
-            
-            # Clean up pending confirmation
-            if owner_id in self.pending_confirmations:
-                del self.pending_confirmations[owner_id]
-            
-            if response == "yes":
-                return {
-                    "confirmed": True,
-                    "message": "Confirmation granted by user"
-                }
+            if str(reaction.emoji) == "✅":
+                await confirmation_msg.edit(content=f"{confirmation_msg.content}\n\n✅ **Confirmed - Proceeding...**")
+                return {"confirmed": True, "message": "Operation confirmed"}
             else:
-                return {
-                    "confirmed": False,
-                    "message": "Operation cancelled by user"
-                }
+                await confirmation_msg.edit(content=f"{confirmation_msg.content}\n\n❌ **Cancelled**")
+                return {"confirmed": False, "message": "Operation cancelled by user"}
                 
         except asyncio.TimeoutError:
-            # Clean up pending confirmation
-            if owner_id in self.pending_confirmations:
-                del self.pending_confirmations[owner_id]
+            await confirmation_msg.edit(content=f"{confirmation_msg.content}\n\n⏰ **Timed out after 90 seconds**")
+            return {"confirmed": False, "message": "Operation timed out"}
+    
+    def _format_function_description(self, function_name: str, function_args: Dict[str, Any]) -> str:
+        """
+        Format a readable description of the function call.
+        
+        Args:
+            function_name (str): Name of the function
+            function_args (Dict[str, Any]): Function arguments
             
-            await channel.send("⏰ Confirmation timeout. Operation cancelled for safety.")
-            return {
-                "confirmed": False,
-                "message": "Operation cancelled due to timeout"
-            }
+        Returns:
+            str: Human-readable description
+        """
+        if function_name == "delete_channel":
+            channel_id = function_args.get("channel_identifier", "unknown")
+            return f"Delete channel '{channel_id}'"
+        elif function_name == "delete_role":
+            role_id = function_args.get("role_identifier", "unknown")
+            return f"Delete role '{role_id}'"
+        elif function_name == "kick_member":
+            member_id = function_args.get("member_identifier", "unknown")
+            reason = function_args.get("reason", "No reason provided")
+            return f"Kick member '{member_id}' (Reason: {reason})"
+        elif function_name == "ban_member":
+            member_id = function_args.get("member_identifier", "unknown")
+            reason = function_args.get("reason", "No reason provided")
+            return f"Ban member '{member_id}' (Reason: {reason})"
+        elif function_name == "execute_cross_server_clone":
+            target_id = function_args.get("target_guild_id", "unknown")
+            return f"Clone data to server ID {target_id}"
+        else:
+            return f"Execute {function_name} with parameters: {function_args}"
