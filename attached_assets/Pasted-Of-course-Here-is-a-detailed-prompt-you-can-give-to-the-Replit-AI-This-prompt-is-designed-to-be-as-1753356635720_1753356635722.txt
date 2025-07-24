@@ -1,0 +1,45 @@
+Of course. Here is a detailed prompt you can give to the Replit AI. This prompt is designed to be as clear as possible, explaining the project's goal, structure, and the critical safety features we discussed.
+
+Just copy the text in the box below and paste it into the Replit AI prompt area.
+
+***
+
+### App Type to Select:
+Web app (Python)
+
+### Prompt to Give Replit AI:
+
+Create a Python Discord bot that acts as a powerful, AI-powered server management agent. The bot must only listen to commands from a single, hard-coded server owner.
+
+The core of the bot will use the Google Gemini API's "function calling" feature. It will not have pre-defined commands like `!delete`. Instead, it will have a single command, `¬askai`, that takes a natural language instruction (e.g., `¬askai delete the #general channel`). The bot will then use the Gemini AI to understand the user's intent, create a plan using a "toolbox" of available functions, and execute that plan.
+
+**Core Requirements:**
+
+1.  **Owner-Only Restriction:** The bot must be hard-coded to only accept and process commands from a specific `DISCORD_OWNER_ID`. All other users must be ignored.
+
+2.  **Configuration:** Use Replit Secrets to manage sensitive keys: `DISCORD_BOT_TOKEN`, `GEMINI_API_KEY`, and `DISCORD_OWNER_ID`. Create a `config.py` file to load these secrets into the application.
+
+3.  **Modular File Structure:**
+    * `main.py`: The main entry point. Handles connecting to Discord, listening for the `¬askai` command, and invoking the AI agent.
+    * `discord_tools.py`: This is the AI's "toolbox." It should contain basic server management functions like `list_channels`, `get_role`, and `delete_channel`. Each function must have a clear docstring explaining what it does and what arguments it takes, as this is how the AI will learn to use them.
+    * `ai_agent.py`: Contains the main `DiscordAgent` class. This class will manage the conversation with the Gemini API, execute the function calls requested by the AI, and handle the back-and-forth communication loop until the task is complete.
+
+4.  **Critical Safety Feature - Confirmation Step:**
+    * In `discord_tools.py`, maintain a list of "dangerous" function names (e.g., `['delete_channel', 'update_role_permissions']`).
+    * In `ai_agent.py`, before executing any function from this dangerous list, the bot MUST stop and send a confirmation message to Discord.
+    * The confirmation message must clearly state which function it is about to run and with what arguments.
+    * It must then wait for the owner to reply with "yes". If the owner replies with anything else or doesn't reply within 60 seconds, the action must be cancelled.
+
+**Example Workflow to Implement:**
+
+* **Owner types:** `¬askai delete the channel named 'old-stuff'`
+* **Bot (`main.py`)** captures this and passes the prompt to the `DiscordAgent` in `ai_agent.py`.
+* **Agent (`ai_agent.py`)** sends the prompt and the list of available tools (from `discord_tools.py`) to the Gemini API.
+* **Gemini** analyzes the request and responds with a request to call the function `delete_channel` with the argument `channel_name='old-stuff'`.
+* **Agent (`ai_agent.py`)** sees that `delete_channel` is on the dangerous functions list.
+* **Bot** sends a message to Discord: "**CONFIRMATION REQUIRED**: I am about to execute `delete_channel` with arguments `{'channel_name': 'old-stuff'}`. This is irreversible. Proceed? (yes/no)"
+* **Owner** replies: `yes`
+* **Agent (`ai_agent.py`)** executes the actual `delete_channel` function from `discord_tools.py`.
+* The result (e.g., "Successfully deleted channel.") is sent back to the Gemini API.
+* **Gemini** processes the result and provides a final, user-friendly response: "I have successfully deleted the 'old-stuff' channel."
+* **Bot** sends this final message to Discord.
