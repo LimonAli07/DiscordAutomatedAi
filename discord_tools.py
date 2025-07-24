@@ -605,3 +605,343 @@ class DiscordTools:
         except Exception as e:
             logger.error(f"Error getting server info: {e}")
             return f"Error getting server info: {str(e)}"
+    
+    async def create_role(self, guild_id: int, role_name: str, color: str = None, permissions: List[str] = None) -> str:
+        """
+        Create a new role in the Discord server.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            role_name (str): Name for the new role
+            color (str, optional): Hex color code (e.g., "#FF0000" or "red")
+            permissions (List[str], optional): List of permission names to grant
+            
+        Returns:
+            str: Success message with role details
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            # Parse color
+            role_color = discord.Color.default()
+            if color:
+                if color.startswith("#"):
+                    # Hex color
+                    try:
+                        role_color = discord.Color(int(color[1:], 16))
+                    except ValueError:
+                        return f"Error: Invalid hex color '{color}'. Use format #RRGGBB"
+                else:
+                    # Named colors
+                    color_map = {
+                        "red": discord.Color.red(),
+                        "blue": discord.Color.blue(),
+                        "green": discord.Color.green(),
+                        "yellow": discord.Color.yellow(),
+                        "orange": discord.Color.orange(),
+                        "purple": discord.Color.purple(),
+                        "pink": discord.Color.from_rgb(255, 192, 203),
+                        "white": discord.Color.from_rgb(255, 255, 255),
+                        "black": discord.Color.from_rgb(0, 0, 0),
+                        "gold": discord.Color.gold(),
+                        "cyan": discord.Color.from_rgb(0, 255, 255),
+                        "magenta": discord.Color.magenta()
+                    }
+                    role_color = color_map.get(color.lower(), discord.Color.default())
+            
+            # Set up permissions
+            role_permissions = discord.Permissions.none()
+            if permissions:
+                for perm in permissions:
+                    if hasattr(discord.Permissions, perm.lower()):
+                        setattr(role_permissions, perm.lower(), True)
+            
+            # Create the role
+            new_role = await guild.create_role(
+                name=role_name,
+                color=role_color,
+                permissions=role_permissions,
+                reason="Created by AI bot"
+            )
+            
+            color_hex = f"#{role_color.value:06x}" if role_color != discord.Color.default() else "default"
+            perm_list = [perm for perm, value in role_permissions if value] if permissions else ["none"]
+            
+            return f"✅ Successfully created role '{role_name}' (ID: {new_role.id})\nColor: {color_hex}\nPermissions: {', '.join(perm_list) if perm_list != ['none'] else 'none'}"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to create roles"
+        except Exception as e:
+            logger.error(f"Error creating role: {e}")
+            return f"Error creating role: {str(e)}"
+    
+    async def modify_role(self, guild_id: int, role_identifier: str, new_name: str = None, color: str = None, permissions: List[str] = None) -> str:
+        """
+        Modify an existing role's properties.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            role_identifier (str): Role name, ID, or mention
+            new_name (str, optional): New name for the role
+            color (str, optional): New hex color code or color name
+            permissions (List[str], optional): List of permission names to set
+            
+        Returns:
+            str: Success message with updated role details
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            role = await self.get_role_by_name_or_id(guild_id, role_identifier)
+            if not role:
+                return f"Error: Could not find role '{role_identifier}'"
+            
+            # Prepare updates
+            updates = {}
+            
+            # Update name
+            if new_name:
+                updates['name'] = new_name
+            
+            # Update color
+            if color:
+                if color.startswith("#"):
+                    try:
+                        updates['color'] = discord.Color(int(color[1:], 16))
+                    except ValueError:
+                        return f"Error: Invalid hex color '{color}'. Use format #RRGGBB"
+                else:
+                    color_map = {
+                        "red": discord.Color.red(),
+                        "blue": discord.Color.blue(),
+                        "green": discord.Color.green(),
+                        "yellow": discord.Color.yellow(),
+                        "orange": discord.Color.orange(),
+                        "purple": discord.Color.purple(),
+                        "pink": discord.Color.from_rgb(255, 192, 203),
+                        "white": discord.Color.from_rgb(255, 255, 255),
+                        "black": discord.Color.from_rgb(0, 0, 0),
+                        "gold": discord.Color.gold(),
+                        "cyan": discord.Color.from_rgb(0, 255, 255),
+                        "magenta": discord.Color.magenta()
+                    }
+                    updates['color'] = color_map.get(color.lower(), role.color)
+            
+            # Update permissions
+            if permissions:
+                role_permissions = discord.Permissions.none()
+                for perm in permissions:
+                    if hasattr(discord.Permissions, perm.lower()):
+                        setattr(role_permissions, perm.lower(), True)
+                updates['permissions'] = role_permissions
+            
+            # Apply updates
+            if updates:
+                await role.edit(**updates, reason="Modified by AI bot")
+            
+            # Prepare response
+            changes = []
+            if new_name:
+                changes.append(f"name to '{new_name}'")
+            if color:
+                color_hex = f"#{updates.get('color', role.color).value:06x}"
+                changes.append(f"color to {color_hex}")
+            if permissions:
+                perm_list = [perm for perm, value in updates.get('permissions', role.permissions) if value]
+                changes.append(f"permissions to: {', '.join(perm_list) if perm_list else 'none'}")
+            
+            if not changes:
+                return f"No changes specified for role '{role.name}'"
+            
+            return f"✅ Successfully updated role '{role.name}' (ID: {role.id})\nChanges: {', '.join(changes)}"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to modify roles"
+        except Exception as e:
+            logger.error(f"Error modifying role: {e}")
+            return f"Error modifying role: {str(e)}"
+    
+    async def add_role_to_member(self, guild_id: int, member_identifier: str, role_identifier: str) -> str:
+        """
+        Add a role to a member.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            member_identifier (str): Member name, ID, or mention
+            role_identifier (str): Role name, ID, or mention
+            
+        Returns:
+            str: Success message
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            member = await self.get_member_by_name_or_id(guild_id, member_identifier)
+            if not member:
+                return f"Error: Could not find member '{member_identifier}'"
+            
+            role = await self.get_role_by_name_or_id(guild_id, role_identifier)
+            if not role:
+                return f"Error: Could not find role '{role_identifier}'"
+            
+            if role in member.roles:
+                return f"Member '{member.display_name}' already has role '{role.name}'"
+            
+            await member.add_roles(role, reason="Added by AI bot")
+            return f"✅ Successfully added role '{role.name}' to member '{member.display_name}'"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to manage roles"
+        except Exception as e:
+            logger.error(f"Error adding role to member: {e}")
+            return f"Error adding role to member: {str(e)}"
+    
+    async def remove_role_from_member(self, guild_id: int, member_identifier: str, role_identifier: str) -> str:
+        """
+        Remove a role from a member.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            member_identifier (str): Member name, ID, or mention
+            role_identifier (str): Role name, ID, or mention
+            
+        Returns:
+            str: Success message
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            member = await self.get_member_by_name_or_id(guild_id, member_identifier)
+            if not member:
+                return f"Error: Could not find member '{member_identifier}'"
+            
+            role = await self.get_role_by_name_or_id(guild_id, role_identifier)
+            if not role:
+                return f"Error: Could not find role '{role_identifier}'"
+            
+            if role not in member.roles:
+                return f"Member '{member.display_name}' doesn't have role '{role.name}'"
+            
+            await member.remove_roles(role, reason="Removed by AI bot")
+            return f"✅ Successfully removed role '{role.name}' from member '{member.display_name}'"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to manage roles"
+        except Exception as e:
+            logger.error(f"Error removing role from member: {e}")
+            return f"Error removing role from member: {str(e)}"
+    
+    async def create_channel(self, guild_id: int, channel_name: str, channel_type: str = "text", category: str = None) -> str:
+        """
+        Create a new channel in the Discord server.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            channel_name (str): Name for the new channel
+            channel_type (str): Type of channel ('text', 'voice', 'category')
+            category (str, optional): Name or ID of category to place channel under
+            
+        Returns:
+            str: Success message with channel details
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            # Find category if specified
+            category_obj = None
+            if category:
+                for cat in guild.categories:
+                    if cat.name.lower() == category.lower() or str(cat.id) == category:
+                        category_obj = cat
+                        break
+            
+            # Create channel based on type
+            if channel_type.lower() == "text":
+                new_channel = await guild.create_text_channel(
+                    name=channel_name,
+                    category=category_obj,
+                    reason="Created by AI bot"
+                )
+            elif channel_type.lower() == "voice":
+                new_channel = await guild.create_voice_channel(
+                    name=channel_name,
+                    category=category_obj,
+                    reason="Created by AI bot"
+                )
+            elif channel_type.lower() == "category":
+                new_channel = await guild.create_category(
+                    name=channel_name,
+                    reason="Created by AI bot"
+                )
+            else:
+                return f"Error: Invalid channel type '{channel_type}'. Use 'text', 'voice', or 'category'"
+            
+            category_info = f" in category '{category_obj.name}'" if category_obj else ""
+            return f"✅ Successfully created {channel_type} channel '{channel_name}' (ID: {new_channel.id}){category_info}"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to create channels"
+        except Exception as e:
+            logger.error(f"Error creating channel: {e}")
+            return f"Error creating channel: {str(e)}"
+    
+    async def modify_channel(self, guild_id: int, channel_identifier: str, new_name: str = None, new_topic: str = None) -> str:
+        """
+        Modify an existing channel's properties.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            channel_identifier (str): Channel name, ID, or mention
+            new_name (str, optional): New name for the channel
+            new_topic (str, optional): New topic for the channel (text channels only)
+            
+        Returns:
+            str: Success message with updated channel details
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            channel = await self.get_channel_by_name_or_id(guild_id, channel_identifier)
+            if not channel:
+                return f"Error: Could not find channel '{channel_identifier}'"
+            
+            # Prepare updates
+            updates = {}
+            changes = []
+            
+            if new_name:
+                updates['name'] = new_name
+                changes.append(f"name to '{new_name}'")
+            
+            if new_topic and hasattr(channel, 'topic'):
+                updates['topic'] = new_topic
+                changes.append(f"topic to '{new_topic}'")
+            elif new_topic:
+                return f"Error: Cannot set topic on {channel.type} channel"
+            
+            # Apply updates
+            if updates:
+                await channel.edit(**updates, reason="Modified by AI bot")
+            
+            if not changes:
+                return f"No changes specified for channel '{channel.name}'"
+            
+            return f"✅ Successfully updated channel '{channel.name}' (ID: {channel.id})\nChanges: {', '.join(changes)}"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to modify channels"
+        except Exception as e:
+            logger.error(f"Error modifying channel: {e}")
+            return f"Error modifying channel: {str(e)}"
