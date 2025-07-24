@@ -58,12 +58,12 @@ class DiscordAgent:
                             "type": "integer",
                             "description": "The ID of the Discord server"
                         },
-                        "channel_name": {
+                        "channel_identifier": {
                             "type": "string",
-                            "description": "The name of the channel to delete"
+                            "description": "The name or ID of the channel to delete (supports Discord mentions like <#123456789>, direct IDs like '123456789', or channel names like 'general')"
                         }
                     },
-                    "required": ["guild_id", "channel_name"]
+                    "required": ["guild_id", "channel_identifier"]
                 }
             },
             {
@@ -133,6 +133,68 @@ class DiscordAgent:
                         }
                     },
                     "required": ["guild_id"]
+                }
+            },
+            {
+                "name": "delete_role",
+                "description": "Delete a role from the Discord server (DANGEROUS - requires confirmation)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "guild_id": {
+                            "type": "integer",
+                            "description": "The ID of the Discord server"
+                        },
+                        "role_identifier": {
+                            "type": "string",
+                            "description": "The name or ID of the role to delete (supports Discord mentions like <@&123456789>, direct IDs, or role names)"
+                        }
+                    },
+                    "required": ["guild_id", "role_identifier"]
+                }
+            },
+            {
+                "name": "kick_member",
+                "description": "Kick a member from the Discord server (DANGEROUS - requires confirmation)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "guild_id": {
+                            "type": "integer",
+                            "description": "The ID of the Discord server"
+                        },
+                        "member_identifier": {
+                            "type": "string",
+                            "description": "The name or ID of the member to kick (supports Discord mentions like <@123456789>, direct IDs, usernames, or display names)"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Optional reason for the kick"
+                        }
+                    },
+                    "required": ["guild_id", "member_identifier"]
+                }
+            },
+            {
+                "name": "ban_member",
+                "description": "Ban a member from the Discord server (DANGEROUS - requires confirmation)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "guild_id": {
+                            "type": "integer",
+                            "description": "The ID of the Discord server"
+                        },
+                        "member_identifier": {
+                            "type": "string",
+                            "description": "The name or ID of the member to ban (supports Discord mentions like <@123456789>, direct IDs, usernames, or display names)"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Optional reason for the ban"
+                        }
+                    },
+                    "required": ["guild_id", "member_identifier"]
                 }
             }
         ]

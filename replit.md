@@ -8,6 +8,16 @@ This repository contains a Discord bot that provides AI-powered server managemen
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+**July 24, 2025 - Enhanced ID-based Operations**
+- Added support for managing channels, roles, and members by both name and ID
+- Channel deletion now accepts Discord mentions (<#123456789>), direct IDs (123456789), or channel names
+- Role deletion now accepts Discord mentions (<@&123456789>), direct IDs (123456789), or role names  
+- Member kick/ban now accepts Discord mentions (<@123456789>), direct IDs (123456789), usernames, or display names
+- Updated function schemas in AI agent to reflect new identifier parameters
+- Fixed potential "genai not defined" errors by ensuring complete migration to DeepSeek model
+
 ## System Architecture
 
 ### Core Design Pattern

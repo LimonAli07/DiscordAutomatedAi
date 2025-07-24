@@ -51,13 +51,13 @@ class DiscordTools:
             logger.error(f"Error listing channels: {e}")
             return f"Error listing channels: {str(e)}"
     
-    async def get_channel_by_name(self, guild_id: int, channel_name: str) -> Optional[discord.abc.GuildChannel]:
+    async def get_channel_by_name_or_id(self, guild_id: int, channel_identifier: str) -> Optional[discord.abc.GuildChannel]:
         """
-        Get a channel by its name.
+        Get a channel by its name or ID.
         
         Args:
             guild_id (int): The ID of the Discord server
-            channel_name (str): The name of the channel to find
+            channel_identifier (str): The name or ID of the channel to find
             
         Returns:
             Optional[discord.abc.GuildChannel]: The channel object if found, None otherwise
@@ -67,8 +67,28 @@ class DiscordTools:
             if not guild:
                 return None
             
+            # Try to parse as ID first (if it's numeric or a mention)
+            channel_id = None
+            
+            # Handle Discord mentions like <#1234567890>
+            if channel_identifier.startswith('<#') and channel_identifier.endswith('>'):
+                try:
+                    channel_id = int(channel_identifier[2:-1])
+                except ValueError:
+                    pass
+            # Handle direct ID numbers
+            elif channel_identifier.isdigit():
+                channel_id = int(channel_identifier)
+            
+            # If we have an ID, try to get channel by ID
+            if channel_id:
+                channel = guild.get_channel(channel_id)
+                if channel:
+                    return channel
+            
+            # Otherwise, search by name
             # Remove # prefix if present
-            channel_name = channel_name.lstrip('#')
+            channel_name = channel_identifier.lstrip('#')
             
             for channel in guild.channels:
                 if channel.name.lower() == channel_name.lower():
@@ -77,24 +97,24 @@ class DiscordTools:
             return None
         
         except Exception as e:
-            logger.error(f"Error getting channel by name: {e}")
+            logger.error(f"Error getting channel by name or ID: {e}")
             return None
     
-    async def delete_channel(self, guild_id: int, channel_name: str) -> str:
+    async def delete_channel(self, guild_id: int, channel_identifier: str) -> str:
         """
-        Delete a channel from the Discord server.
+        Delete a channel from the Discord server by name or ID.
         
         Args:
             guild_id (int): The ID of the Discord server
-            channel_name (str): The name of the channel to delete
+            channel_identifier (str): The name or ID of the channel to delete
             
         Returns:
             str: Success or error message
         """
         try:
-            channel = await self.get_channel_by_name(guild_id, channel_name)
+            channel = await self.get_channel_by_name_or_id(guild_id, channel_identifier)
             if not channel:
-                return f"Error: Channel '{channel_name}' not found"
+                return f"Error: Channel '{channel_identifier}' not found"
             
             channel_name_display = channel.name
             await channel.delete(reason="Deleted by AI bot on owner's request")
@@ -136,13 +156,13 @@ class DiscordTools:
             logger.error(f"Error listing roles: {e}")
             return f"Error listing roles: {str(e)}"
     
-    async def get_role_by_name(self, guild_id: int, role_name: str) -> Optional[discord.Role]:
+    async def get_role_by_name_or_id(self, guild_id: int, role_identifier: str) -> Optional[discord.Role]:
         """
-        Get a role by its name.
+        Get a role by its name or ID.
         
         Args:
             guild_id (int): The ID of the Discord server
-            role_name (str): The name of the role to find
+            role_identifier (str): The name or ID of the role to find
             
         Returns:
             Optional[discord.Role]: The role object if found, None otherwise
@@ -152,15 +172,175 @@ class DiscordTools:
             if not guild:
                 return None
             
+            # Try to parse as ID first (if it's numeric or a mention)
+            role_id = None
+            
+            # Handle Discord mentions like <@&1234567890>
+            if role_identifier.startswith('<@&') and role_identifier.endswith('>'):
+                try:
+                    role_id = int(role_identifier[3:-1])
+                except ValueError:
+                    pass
+            # Handle direct ID numbers
+            elif role_identifier.isdigit():
+                role_id = int(role_identifier)
+            
+            # If we have an ID, try to get role by ID
+            if role_id:
+                role = guild.get_role(role_id)
+                if role:
+                    return role
+            
+            # Otherwise, search by name
             for role in guild.roles:
-                if role.name.lower() == role_name.lower():
+                if role.name.lower() == role_identifier.lower():
                     return role
             
             return None
         
         except Exception as e:
-            logger.error(f"Error getting role by name: {e}")
+            logger.error(f"Error getting role by name or ID: {e}")
             return None
+    
+    async def delete_role(self, guild_id: int, role_identifier: str) -> str:
+        """
+        Delete a role from the Discord server by name or ID.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            role_identifier (str): The name or ID of the role to delete
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            role = await self.get_role_by_name_or_id(guild_id, role_identifier)
+            if not role:
+                return f"Error: Role '{role_identifier}' not found"
+            
+            if role.name == "@everyone":
+                return "Error: Cannot delete the @everyone role"
+            
+            role_name_display = role.name
+            await role.delete(reason="Deleted by AI bot on owner's request")
+            return f"Successfully deleted role '{role_name_display}'"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to delete roles"
+        except Exception as e:
+            logger.error(f"Error deleting role: {e}")
+            return f"Error deleting role: {str(e)}"
+    
+    async def get_member_by_name_or_id(self, guild_id: int, member_identifier: str) -> Optional[discord.Member]:
+        """
+        Get a member by their name, display name, or ID.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            member_identifier (str): The name, display name, or ID of the member to find
+            
+        Returns:
+            Optional[discord.Member]: The member object if found, None otherwise
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return None
+            
+            # Try to parse as ID first (if it's numeric or a mention)
+            member_id = None
+            
+            # Handle Discord mentions like <@1234567890> or <@!1234567890>
+            if member_identifier.startswith('<@') and member_identifier.endswith('>'):
+                try:
+                    # Remove <@ and > and handle optional !
+                    id_str = member_identifier[2:-1].lstrip('!')
+                    member_id = int(id_str)
+                except ValueError:
+                    pass
+            # Handle direct ID numbers
+            elif member_identifier.isdigit():
+                member_id = int(member_identifier)
+            
+            # If we have an ID, try to get member by ID
+            if member_id:
+                member = guild.get_member(member_id)
+                if member:
+                    return member
+            
+            # Otherwise, search by name or display name
+            for member in guild.members:
+                if (member.name.lower() == member_identifier.lower() or 
+                    member.display_name.lower() == member_identifier.lower()):
+                    return member
+            
+            return None
+        
+        except Exception as e:
+            logger.error(f"Error getting member by name or ID: {e}")
+            return None
+    
+    async def kick_member(self, guild_id: int, member_identifier: str, reason: str = None) -> str:
+        """
+        Kick a member from the Discord server by name or ID.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            member_identifier (str): The name or ID of the member to kick
+            reason (str): Optional reason for the kick
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            member = await self.get_member_by_name_or_id(guild_id, member_identifier)
+            if not member:
+                return f"Error: Member '{member_identifier}' not found"
+            
+            if member.guild_permissions.administrator:
+                return "Error: Cannot kick administrators"
+            
+            member_name = member.display_name
+            kick_reason = reason or "Kicked by AI bot on owner's request"
+            await member.kick(reason=kick_reason)
+            return f"Successfully kicked member '{member_name}'"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to kick members"
+        except Exception as e:
+            logger.error(f"Error kicking member: {e}")
+            return f"Error kicking member: {str(e)}"
+    
+    async def ban_member(self, guild_id: int, member_identifier: str, reason: str = None) -> str:
+        """
+        Ban a member from the Discord server by name or ID.
+        
+        Args:
+            guild_id (int): The ID of the Discord server
+            member_identifier (str): The name or ID of the member to ban
+            reason (str): Optional reason for the ban
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            member = await self.get_member_by_name_or_id(guild_id, member_identifier)
+            if not member:
+                return f"Error: Member '{member_identifier}' not found"
+            
+            if member.guild_permissions.administrator:
+                return "Error: Cannot ban administrators"
+            
+            member_name = member.display_name
+            ban_reason = reason or "Banned by AI bot on owner's request"
+            await member.ban(reason=ban_reason)
+            return f"Successfully banned member '{member_name}'"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to ban members"
+        except Exception as e:
+            logger.error(f"Error banning member: {e}")
+            return f"Error banning member: {str(e)}"
     
     async def create_channel(self, guild_id: int, channel_name: str, channel_type: str = "text") -> str:
         """
