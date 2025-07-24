@@ -3,8 +3,8 @@ import logging
 import asyncio
 import discord
 from typing import Dict, Any, List, Optional, Callable
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai import types
 from pydantic import BaseModel
 
 from config import config
@@ -23,7 +23,7 @@ class DiscordAgent:
     def __init__(self, bot: discord.Client):
         self.bot = bot
         self.discord_tools = DiscordTools(bot)
-        self.client = genai.Client(api_key=config.gemini_api_key)
+        genai.configure(api_key=config.gemini_api_key)
         self.pending_confirmations: Dict[int, Dict[str, Any]] = {}
         
         # Build the function schema for Gemini
@@ -189,49 +189,40 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
             str: The final response from the AI
         """
         try:
-            # Convert function schemas to Gemini tool format
-            tools = [
-                types.Tool(
-                    function_declarations=[
-                        types.FunctionDeclaration(
-                            name=schema["name"],
-                            description=schema["description"],
-                            parameters=schema["parameters"]
-                        ) for schema in self.function_schemas
-                    ]
-                )
-            ]
+            # Convert function schemas to tool declarations for older API
+            tools = []
+            for schema in self.function_schemas:
+                tools.append({
+                    "function_declarations": [{
+                        "name": schema["name"],
+                        "description": schema["description"],
+                        "parameters": schema["parameters"]
+                    }]
+                })
             
-            # Make the initial request
-            response = self.client.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=[
-                    types.Content(role="user", parts=[types.Part(text=user_prompt)])
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    tools=tools,
-                    tool_config=types.ToolConfig(
-                        function_calling_config=types.FunctionCallingConfig(
-                            mode=types.FunctionCallingConfig.Mode.AUTO
-                        )
-                    )
-                )
+            # Create the model
+            model = genai.GenerativeModel(
+                model_name="gemini-1.5-pro",
+                system_instruction=system_prompt,
+                tools=tools
             )
             
-            if not response.candidates or not response.candidates[0].content:
+            # Make the initial request
+            response = model.generate_content(user_prompt)
+            
+            if not response.candidates:
                 return "I'm sorry, I couldn't process your request. Please try again."
             
-            content = response.candidates[0].content
+            candidate = response.candidates[0]
             
             # Check if AI wants to call functions
             function_calls = []
             text_response = ""
             
-            for part in content.parts:
-                if part.function_call:
+            for part in candidate.content.parts:
+                if hasattr(part, 'function_call') and part.function_call:
                     function_calls.append(part.function_call)
-                elif part.text:
+                elif hasattr(part, 'text') and part.text:
                     text_response += part.text
             
             if function_calls:
@@ -249,59 +240,58 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
                         )
                         
                         if not confirmation_result["confirmed"]:
-                            function_responses.append(
-                                types.Part(
-                                    function_response=types.FunctionResponse(
-                                        name=function_name,
-                                        response={"error": confirmation_result["message"]}
-                                    )
-                                )
-                            )
+                            function_responses.append({
+                                "function_response": {
+                                    "name": function_name,
+                                    "response": {"error": confirmation_result["message"]}
+                                }
+                            })
                             continue
                     
                     # Execute the function
                     try:
                         result = await self._execute_function(function_name, function_args)
-                        function_responses.append(
-                            types.Part(
-                                function_response=types.FunctionResponse(
-                                    name=function_name,
-                                    response={"result": result}
-                                )
-                            )
-                        )
+                        function_responses.append({
+                            "function_response": {
+                                "name": function_name,
+                                "response": {"result": result}
+                            }
+                        })
                     except Exception as e:
                         logger.error(f"Error executing function {function_name}: {e}")
-                        function_responses.append(
-                            types.Part(
-                                function_response=types.FunctionResponse(
-                                    name=function_name,
-                                    response={"error": str(e)}
-                                )
-                            )
-                        )
+                        function_responses.append({
+                            "function_response": {
+                                "name": function_name,
+                                "response": {"error": str(e)}
+                            }
+                        })
                 
                 # Send function results back to Gemini for final response
                 if function_responses:
-                    final_response = self.client.models.generate_content(
-                        model="gemini-2.5-pro",
-                        contents=[
-                            types.Content(role="user", parts=[types.Part(text=user_prompt)]),
-                            content,  # AI's response with function calls
-                            types.Content(role="function", parts=function_responses)
-                        ],
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            tools=tools
-                        )
-                    )
+                    # Build the conversation history for the older API
+                    chat_history = [
+                        {"role": "user", "parts": [{"text": user_prompt}]},
+                        {"role": "model", "parts": [{"text": text_response}] + [{"function_call": fc} for fc in function_calls]},
+                        {"role": "function", "parts": function_responses}
+                    ]
                     
-                    if final_response.candidates and final_response.candidates[0].content:
-                        final_text = ""
-                        for part in final_response.candidates[0].content.parts:
-                            if part.text:
-                                final_text += part.text
-                        return final_text or "Task completed successfully."
+                    try:
+                        final_response = model.generate_content(chat_history)
+                        
+                        if final_response.candidates and final_response.candidates[0].content:
+                            final_text = ""
+                            for part in final_response.candidates[0].content.parts:
+                                if hasattr(part, 'text') and part.text:
+                                    final_text += part.text
+                            return final_text or "Task completed successfully."
+                    except Exception as e:
+                        logger.error(f"Error generating final response: {e}")
+                        # Return a summary of the function results
+                        results_summary = []
+                        for resp in function_responses:
+                            if "result" in resp["function_response"]["response"]:
+                                results_summary.append(resp["function_response"]["response"]["result"])
+                        return "\n".join(results_summary) if results_summary else "Task completed successfully."
                 
                 return "Task completed successfully."
             
