@@ -1,6 +1,7 @@
 import discord
 import asyncio
 import logging
+from typing import Dict
 from discord.ext import commands
 
 from config import config
@@ -27,6 +28,8 @@ class DiscordBot(discord.Client):
         
         self.ai_agent = None
         self.command_prefix = "¬askai"
+        # Track user sessions to maintain server context
+        self.user_sessions: Dict[int, int] = {}  # user_id -> current_guild_id
     
     async def on_ready(self):
         """Called when the bot is ready."""
@@ -71,6 +74,9 @@ class DiscordBot(discord.Client):
         
         # Check for the askai command
         if message.content.startswith(self.command_prefix):
+            # Update user session to current guild
+            if message.guild:
+                self.user_sessions[message.author.id] = message.guild.id
             await self.handle_askai_command(message)
     
     async def handle_askai_command(self, message):

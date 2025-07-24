@@ -10,13 +10,22 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**July 24, 2025 - Enhanced ID-based Operations**
+**July 24, 2025 - Enhanced ID-based Operations & Session Management**
 - Added support for managing channels, roles, and members by both name and ID
 - Channel deletion now accepts Discord mentions (<#123456789>), direct IDs (123456789), or channel names
 - Role deletion now accepts Discord mentions (<@&123456789>), direct IDs (123456789), or role names  
 - Member kick/ban now accepts Discord mentions (<@123456789>), direct IDs (123456789), usernames, or display names
 - Updated function schemas in AI agent to reflect new identifier parameters
 - Fixed potential "genai not defined" errors by ensuring complete migration to DeepSeek model
+
+**July 24, 2025 - Session Management & Cross-Server Operations**
+- Added session tracking to prevent bot confusion between multiple servers
+- Bot now stays focused on one server per command session
+- Added cross-server cloning functionality for channels and roles
+- New commands: "prepare clone" and "execute clone" for cross-server operations
+- Single response guarantee - bot only responds once per command
+- Added safety confirmation for cross-server clone operations
+- Enhanced Discord tools with cross-server data management
 
 ## System Architecture
 

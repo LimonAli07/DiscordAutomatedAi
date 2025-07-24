@@ -27,6 +27,8 @@ class DiscordAgent:
             api_key=config.openai_api_key
         )
         self.pending_confirmations: Dict[int, Dict[str, Any]] = {}
+        # Track cross-server operations
+        self.cross_server_data: Dict[int, Dict[str, Any]] = {}  # user_id -> stored data
         
         # Build the function schema for OpenAI
         self.function_schemas = self._build_function_schemas()
@@ -196,13 +198,46 @@ class DiscordAgent:
                     },
                     "required": ["guild_id", "member_identifier"]
                 }
+            },
+            {
+                "name": "prepare_cross_server_clone",
+                "description": "Prepare to clone channels/roles from current server to another server",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source_guild_id": {
+                            "type": "integer",
+                            "description": "The ID of the source Discord server"
+                        },
+                        "clone_type": {
+                            "type": "string",
+                            "enum": ["channels", "roles", "both"],
+                            "description": "What to clone (channels, roles, or both)"
+                        }
+                    },
+                    "required": ["source_guild_id", "clone_type"]
+                }
+            },
+            {
+                "name": "execute_cross_server_clone",  
+                "description": "Execute the prepared cross-server clone operation to target server",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_guild_id": {
+                            "type": "integer",
+                            "description": "The ID of the target Discord server"
+                        }
+                    },
+                    "required": ["target_guild_id"]
+                }
             }
         ]
         return schemas
     
     async def process_command(self, message: discord.Message, user_prompt: str) -> str:
         """
-        Process a natural language command using Gemini AI.
+        Process a natural language command using DeepSeek AI.
         
         Args:
             message (discord.Message): The Discord message object
@@ -215,6 +250,22 @@ class DiscordAgent:
             guild_id = message.guild.id if message.guild else None
             if not guild_id:
                 return "Error: This command can only be used in a server, not in DMs."
+            
+            # Check if user is trying to operate in a different server than their session
+            user_id = message.author.id
+            bot_session_guild = getattr(self.bot, 'user_sessions', {}).get(user_id)
+            
+            # Allow cross-server operations for cloning or if session not set
+            is_cross_server_operation = any(word in user_prompt.lower() for word in [
+                'clone', 'duplicate', 'copy', 'transfer', 'from here to another', 'to another server'
+            ])
+            
+            if bot_session_guild and bot_session_guild != guild_id and not is_cross_server_operation:
+                current_guild = self.bot.get_guild(bot_session_guild)
+                return f"I'm currently focused on server '{current_guild.name if current_guild else 'Unknown'}'. Please continue our conversation there, or use a cross-server command like 'clone' if you want to work between servers."
+            
+            # Store current user for cross-server operations
+            self._current_user_id = user_id
             
             # Create the system prompt with context
             system_prompt = f"""You are a Discord server management AI assistant. You have access to various Discord server management functions.
@@ -361,6 +412,11 @@ IMPORTANT: Some functions are marked as DANGEROUS and require confirmation. If y
         Returns:
             str: Result of the function execution
         """
+        # Special handling for cross-server functions that need user_id
+        if function_name == "execute_cross_server_clone":
+            if hasattr(self, '_current_user_id'):
+                function_args["user_id"] = self._current_user_id
+        
         # Get the function from discord_tools
         if hasattr(self.discord_tools, function_name):
             func = getattr(self.discord_tools, function_name)

@@ -13,7 +13,8 @@ DANGEROUS_FUNCTIONS = [
     'kick_member',
     'update_role_permissions',
     'delete_message_bulk',
-    'create_invite_with_perms'
+    'create_invite_with_perms',
+    'execute_cross_server_clone'
 ]
 
 class DiscordTools:
@@ -341,6 +342,149 @@ class DiscordTools:
         except Exception as e:
             logger.error(f"Error banning member: {e}")
             return f"Error banning member: {str(e)}"
+    
+    async def prepare_cross_server_clone(self, source_guild_id: int, clone_type: str) -> str:
+        """
+        Prepare cross-server cloning by storing source server data.
+        
+        Args:
+            source_guild_id (int): The ID of the source Discord server
+            clone_type (str): What to clone ("channels", "roles", or "both")
+            
+        Returns:
+            str: Success message with data summary
+        """
+        try:
+            guild = self.bot.get_guild(source_guild_id)
+            if not guild:
+                return f"Error: Could not find source server with ID {source_guild_id}"
+            
+            clone_data = {
+                "source_guild_id": source_guild_id,
+                "source_guild_name": guild.name,
+                "clone_type": clone_type,
+                "channels": [],
+                "roles": []
+            }
+            
+            if clone_type in ["channels", "both"]:
+                for channel in guild.channels:
+                    if isinstance(channel, discord.TextChannel):
+                        clone_data["channels"].append({
+                            "name": channel.name,
+                            "type": "text",
+                            "topic": channel.topic,
+                            "position": channel.position,
+                            "category": channel.category.name if channel.category else None
+                        })
+                    elif isinstance(channel, discord.VoiceChannel):
+                        clone_data["channels"].append({
+                            "name": channel.name,
+                            "type": "voice",
+                            "user_limit": channel.user_limit,
+                            "position": channel.position,
+                            "category": channel.category.name if channel.category else None
+                        })
+            
+            if clone_type in ["roles", "both"]:
+                for role in guild.roles:
+                    if role.name != "@everyone" and not role.managed:
+                        clone_data["roles"].append({
+                            "name": role.name,
+                            "color": role.color.value,
+                            "permissions": role.permissions.value,
+                            "hoist": role.hoist,
+                            "mentionable": role.mentionable,
+                            "position": role.position
+                        })
+            
+            # Store the data in agent's cross_server_data (we'll access it via bot reference)
+            if hasattr(self.bot, 'ai_agent') and hasattr(self.bot.ai_agent, 'cross_server_data'):
+                # This will be set by the caller with user_id
+                self.bot.ai_agent._temp_clone_data = clone_data
+            
+            channel_count = len(clone_data["channels"])
+            role_count = len(clone_data["roles"])
+            
+            return f"✅ Prepared to clone from '{guild.name}':\n" + \
+                   f"- {channel_count} channels\n" + \
+                   f"- {role_count} roles\n\n" + \
+                   f"Now use the command in your target server to execute the clone."
+        
+        except Exception as e:
+            logger.error(f"Error preparing cross-server clone: {e}")
+            return f"Error preparing clone: {str(e)}"
+    
+    async def execute_cross_server_clone(self, target_guild_id: int, user_id: int) -> str:
+        """
+        Execute the prepared cross-server clone operation.
+        
+        Args:
+            target_guild_id (int): The ID of the target Discord server
+            user_id (int): The user ID to get stored clone data
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            # Get stored clone data
+            if not (hasattr(self.bot, 'ai_agent') and 
+                   hasattr(self.bot.ai_agent, '_temp_clone_data')):
+                return "Error: No clone data prepared. Please use 'prepare clone' first in the source server."
+            
+            clone_data = self.bot.ai_agent._temp_clone_data
+            target_guild = self.bot.get_guild(target_guild_id)
+            
+            if not target_guild:
+                return f"Error: Could not find target server with ID {target_guild_id}"
+            
+            results = []
+            
+            # Clone channels
+            if clone_data["clone_type"] in ["channels", "both"]:
+                for channel_data in clone_data["channels"]:
+                    try:
+                        if channel_data["type"] == "text":
+                            await target_guild.create_text_channel(
+                                name=channel_data["name"],
+                                topic=channel_data["topic"]
+                            )
+                        elif channel_data["type"] == "voice":
+                            await target_guild.create_voice_channel(
+                                name=channel_data["name"],
+                                user_limit=channel_data["user_limit"]
+                            )
+                        results.append(f"✅ Created channel: {channel_data['name']}")
+                    except Exception as e:
+                        results.append(f"❌ Failed to create channel {channel_data['name']}: {str(e)}")
+            
+            # Clone roles
+            if clone_data["clone_type"] in ["roles", "both"]:
+                for role_data in clone_data["roles"]:
+                    try:
+                        await target_guild.create_role(
+                            name=role_data["name"],
+                            color=discord.Color(role_data["color"]),
+                            permissions=discord.Permissions(role_data["permissions"]),
+                            hoist=role_data["hoist"],
+                            mentionable=role_data["mentionable"]
+                        )
+                        results.append(f"✅ Created role: {role_data['name']}")
+                    except Exception as e:
+                        results.append(f"❌ Failed to create role {role_data['name']}: {str(e)}")
+            
+            # Clear the temporary data
+            if hasattr(self.bot.ai_agent, '_temp_clone_data'):
+                delattr(self.bot.ai_agent, '_temp_clone_data')
+            
+            summary = f"🎉 Clone operation completed from '{clone_data['source_guild_name']}' to '{target_guild.name}':\n\n"
+            summary += "\n".join(results)
+            
+            return summary
+        
+        except Exception as e:
+            logger.error(f"Error executing cross-server clone: {e}")
+            return f"Error executing clone: {str(e)}"
     
     async def create_channel(self, guild_id: int, channel_name: str, channel_type: str = "text") -> str:
         """
