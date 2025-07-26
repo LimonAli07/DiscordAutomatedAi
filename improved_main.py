@@ -8,7 +8,6 @@ from discord import app_commands
 from config import config
 from ai_agent import DiscordAgent
 from api_manager import APIManager
-from keep_alive import keep_alive
 
 # Configure logging
 logging.basicConfig(
@@ -226,9 +225,6 @@ async def main():
         
         logger.info("Starting Discord bot...")
         logger.info(f"Owner ID: {config.discord_owner_id}")
-        
-        # Start keep-alive server
-        keep_alive()
         
         # Create and run the bot
         bot = DiscordBot()
