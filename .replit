@@ -23,6 +23,7 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+waitForPort = 8080
 
 [[ports]]
 localPort = 8080
