@@ -19,6 +19,13 @@ DANGEROUS_FUNCTIONS = [
     'delete_category_and_channels',
     'purge_messages',
     'timeout_member',
+    'clean_server',
+    'reset_server',
+    'delete_all_channels',
+    'restore_server',
+    'setup_word_filter',
+    'setup_anti_spam',
+    'create_channel',  # Added channel creation to require confirmation
 ]
 
 class DiscordTools:
@@ -486,6 +493,150 @@ class DiscordTools:
             logger.error(f"Error deleting channel: {e}")
             return f"Error deleting channel: {str(e)}"
     
+    async def get_member_by_name_or_id(self, guild_id: int, member_identifier: str) -> Optional[discord.Member]:
+        """
+        Get a member by name, nickname, mention, or ID.
+        
+        Args:
+            guild_id: The ID of the Discord server
+            member_identifier: The name, nickname, mention, or ID of the member to find
+            
+        Returns:
+            Optional[discord.Member]: The member object if found, None otherwise
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return None
+            
+            # Try to parse as ID first (if it's numeric or a mention)
+            member_id = None
+            
+            # Handle Discord mentions like <@1234567890>
+            if member_identifier.startswith('<@') and member_identifier.endswith('>'):
+                try:
+                    # Remove <@ and > and also remove ! if present (for nicknames)
+                    clean_id = member_identifier[2:-1].replace('!', '')
+                    member_id = int(clean_id)
+                except ValueError:
+                    pass
+            # Handle direct ID numbers
+            elif member_identifier.isdigit():
+                member_id = int(member_identifier)
+            
+            # If we have an ID, try to get member by ID
+            if member_id:
+                member = guild.get_member(member_id)
+                if member:
+                    return member
+            
+            # Otherwise, search by name or nickname
+            lower_identifier = member_identifier.lower()
+            
+            for member in guild.members:
+                # Check username
+                if member.name.lower() == lower_identifier:
+                    return member
+                
+                # Check nickname
+                if member.nick and member.nick.lower() == lower_identifier:
+                    return member
+                
+                # Check full name with discriminator
+                if str(member).lower() == lower_identifier:
+                    return member
+            
+            return None
+        
+        except Exception as e:
+            logger.error(f"Error getting member by name or ID: {e}")
+            return None
+    
+    async def create_channel(self, guild_id: int, channel_name: str, channel_type: str = "text", category: str = None) -> str:
+        """
+        Create a new channel in the Discord server.
+        
+        Args:
+            guild_id: The ID of the Discord server
+            channel_name: The name for the new channel
+            channel_type: The type of channel ('text', 'voice', or 'category')
+            category: Optional category name or ID to place the channel in
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"❌ Error: Could not find guild with ID {guild_id}"
+            
+            # Check bot permissions
+            bot_member = guild.get_member(self.bot.user.id)
+            if not bot_member:
+                return f"❌ Error: Bot is not a member of guild {guild.name}"
+            
+            # Check specific permissions needed
+            required_perms = bot_member.guild_permissions
+            if not required_perms.manage_channels:
+                return f"❌ Error: Bot lacks 'Manage Channels' permission in {guild.name}. Please give the bot this permission."
+            
+            logger.info(f"Creating {channel_type} channel '{channel_name}' in guild {guild.name} (ID: {guild_id})")
+            
+            # Validate channel type
+            if channel_type not in ["text", "voice", "category"]:
+                return f"❌ Error: Invalid channel type '{channel_type}'. Must be 'text', 'voice', or 'category'."
+            
+            # Find category if specified
+            target_category = None
+            if category and channel_type != "category":
+                for cat in guild.categories:
+                    if cat.name.lower() == category.lower() or str(cat.id) == category:
+                        target_category = cat
+                        break
+                
+                if not target_category and category:
+                    return f"❌ Error: Could not find category '{category}'"
+            
+            # Create the channel
+            if channel_type == "category":
+                new_channel = await guild.create_category(
+                    name=channel_name,
+                    reason=f"Created by AI bot for user {bot_member.display_name}"
+                )
+                logger.info(f"Successfully created category '{channel_name}' (ID: {new_channel.id})")
+                return f"✅ Successfully created category '{channel_name}' (ID: {new_channel.id})"
+            elif channel_type == "text":
+                new_channel = await guild.create_text_channel(
+                    name=channel_name,
+                    category=target_category,
+                    reason=f"Created by AI bot for user {bot_member.display_name}"
+                )
+                category_info = f" in category '{target_category.name}'" if target_category else ""
+                logger.info(f"Successfully created text channel '{channel_name}' (ID: {new_channel.id}){category_info}")
+                return f"✅ Successfully created text channel #{channel_name} (ID: {new_channel.id}){category_info}"
+            elif channel_type == "voice":
+                new_channel = await guild.create_voice_channel(
+                    name=channel_name,
+                    category=target_category,
+                    reason=f"Created by AI bot for user {bot_member.display_name}"
+                )
+                category_info = f" in category '{target_category.name}'" if target_category else ""
+                logger.info(f"Successfully created voice channel '{channel_name}' (ID: {new_channel.id}){category_info}")
+                return f"✅ Successfully created voice channel 🔊{channel_name} (ID: {new_channel.id}){category_info}"
+        
+        except discord.Forbidden as e:
+            error_msg = f"❌ Permission Error: Bot doesn't have permission to create channels in {guild.name if guild else 'unknown guild'}. Error: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+        except discord.HTTPException as e:
+            error_msg = f"❌ Discord API Error: {str(e)}"
+            logger.error(f"HTTP error creating channel: {e}")
+            return error_msg
+        except Exception as e:
+            error_msg = f"❌ Unexpected error creating channel: {str(e)}"
+            logger.error(f"Error creating channel: {e}")
+            return error_msg
+    
     # Other methods from original discord_tools.py
     async def create_role(self, guild_id: int, role_name: str, color: str = None, permissions: List[str] = None) -> str:
         """
@@ -557,3 +708,140 @@ class DiscordTools:
         except Exception as e:
             logger.error(f"Error creating role: {e}")
             return f"Error creating role: {str(e)}"
+    
+    async def list_roles(self, guild_id: int) -> str:
+        """
+        List all roles in a Discord server.
+        
+        Args:
+            guild_id: The ID of the Discord server
+            
+        Returns:
+            str: A formatted list of all roles with their IDs and permissions
+        """
+        try:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                return f"Error: Could not find guild with ID {guild_id}"
+            
+            roles = sorted(guild.roles, key=lambda r: r.position, reverse=True)
+            
+            output_lines = [f"Roles in {guild.name}:"]
+            
+            for role in roles:
+                # Skip @everyone role in detailed listing but mention it
+                if role.name == "@everyone":
+                    output_lines.append(f"👥 @everyone (Default Role) - ID: {role.id} - Members: {len(role.members)}")
+                    continue
+                
+                # Get role color
+                color_hex = f"#{role.color.value:06x}" if role.color.value != 0 else "No color"
+                
+                # Count members with this role
+                member_count = len(role.members)
+                
+                # Check if role is hoisted (displayed separately)
+                hoist_status = "📌 Hoisted" if role.hoist else ""
+                
+                # Check if role is mentionable
+                mention_status = "📢 Mentionable" if role.mentionable else ""
+                
+                # Combine status indicators
+                status_indicators = " ".join(filter(None, [hoist_status, mention_status]))
+                
+                output_lines.append(
+                    f"🎭 {role.name} - ID: {role.id} - Color: {color_hex} - Members: {member_count}"
+                    + (f" - {status_indicators}" if status_indicators else "")
+                )
+            
+            if len(roles) <= 1:  # Only @everyone
+                output_lines.append("No custom roles found in this server.")
+            
+            return "\n".join(output_lines)
+        
+        except Exception as e:
+            logger.error(f"Error listing roles: {e}")
+            return f"Error listing roles: {str(e)}"
+    
+    async def kick_member(self, guild_id: int, member_identifier: str, reason: str = None) -> str:
+        """
+        Kick a member from the Discord server.
+        
+        Args:
+            guild_id: The ID of the Discord server
+            member_identifier: The name, nickname, or ID of the member to kick
+            reason: Optional reason for the kick
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            member = await self.get_member_by_name_or_id(guild_id, member_identifier)
+            if not member:
+                return f"Error: Member '{member_identifier}' not found"
+            
+            # Check if we can kick this member
+            guild = self.bot.get_guild(guild_id)
+            bot_member = guild.get_member(self.bot.user.id)
+            
+            if member.top_role.position >= bot_member.top_role.position:
+                return "Error: Cannot kick members with higher or equal roles"
+            
+            if member.guild_permissions.administrator:
+                return "Error: Cannot kick administrators"
+            
+            # Kick the member
+            kick_reason = reason or "Kicked by AI bot"
+            await member.kick(reason=kick_reason)
+            
+            return f"✅ Successfully kicked member '{member.display_name}' from the server"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to kick members"
+        except Exception as e:
+            logger.error(f"Error kicking member: {e}")
+            return f"Error kicking member: {str(e)}"
+    
+    async def ban_member(self, guild_id: int, member_identifier: str, reason: str = None, delete_message_days: int = 0) -> str:
+        """
+        Ban a member from the Discord server.
+        
+        Args:
+            guild_id: The ID of the Discord server
+            member_identifier: The name, nickname, or ID of the member to ban
+            reason: Optional reason for the ban
+            delete_message_days: Number of days of messages to delete (0-7)
+            
+        Returns:
+            str: Success or error message
+        """
+        try:
+            member = await self.get_member_by_name_or_id(guild_id, member_identifier)
+            if not member:
+                return f"Error: Member '{member_identifier}' not found"
+            
+            # Check if we can ban this member
+            guild = self.bot.get_guild(guild_id)
+            bot_member = guild.get_member(self.bot.user.id)
+            
+            if member.top_role.position >= bot_member.top_role.position:
+                return "Error: Cannot ban members with higher or equal roles"
+            
+            if member.guild_permissions.administrator:
+                return "Error: Cannot ban administrators"
+            
+            # Validate delete_message_days
+            if delete_message_days < 0 or delete_message_days > 7:
+                delete_message_days = 0
+            
+            # Ban the member
+            ban_reason = reason or "Banned by AI bot"
+            await member.ban(reason=ban_reason, delete_message_days=delete_message_days)
+            
+            return f"✅ Successfully banned member '{member.display_name}' from the server"
+        
+        except discord.Forbidden:
+            return "Error: Bot doesn't have permission to ban members"
+        except Exception as e:
+            logger.error(f"Error banning member: {e}")
+            return f"Error banning member: {str(e)}"

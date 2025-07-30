@@ -12,9 +12,11 @@ logger = logging.getLogger(__name__)
 
 class ApiProvider(Enum):
     """Enum for different API providers."""
+    GPT4ALL = "gpt4all"
     OPENROUTER = "openrouter"
     GOOGLE_AI = "google_ai"
     CEREBRAS = "cerebras"
+    SAMURAI_API = "samurai_api"
 
 class ApiConfig(BaseModel):
     """Configuration for an API provider."""
@@ -42,9 +44,19 @@ class APIManager:
         self._setup_providers()
     
     def _setup_providers(self) -> None:
-        """Set up all API providers from environment variables."""
+        """Set up all API providers from environment variables or user-supplied config."""
+        # GPT4All configuration (Primary provider)
+        gpt4all_key = os.getenv("GPT4ALL_API_KEY", "")
+        self.configs[ApiProvider.GPT4ALL] = ApiConfig(
+            enabled=bool(gpt4all_key),
+            api_key=gpt4all_key,
+            base_url="https://api.gpt4-all.xyz/v1",  # Correct endpoint from documentation
+            model="gpt-4o-mini",  # Recommended model from documentation
+            retry_attempts=2
+        )
+        
         # OpenRouter configuration
-        openrouter_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+        openrouter_key = os.getenv("OPENAI_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")
         self.configs[ApiProvider.OPENROUTER] = ApiConfig(
             enabled=bool(openrouter_key),
             api_key=openrouter_key,
@@ -54,23 +66,34 @@ class APIManager:
         )
         
         # Google AI Studio configuration
-        google_key = os.getenv("GOOGLE_AI_KEY")
+        google_key = os.getenv("GOOGLE_AI_KEY", "")
         self.configs[ApiProvider.GOOGLE_AI] = ApiConfig(
             enabled=bool(google_key),
             api_key=google_key,
             base_url="https://generativelanguage.googleapis.com/v1beta",
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-exp",  # Updated model name
             retry_attempts=2
         )
         
         # Cerebras configuration
-        cerebras_key = os.getenv("CEREBRAS_API_KEY")
+        cerebras_key = os.getenv("CEREBRAS_API_KEY", "")
         self.configs[ApiProvider.CEREBRAS] = ApiConfig(
             enabled=bool(cerebras_key),
             api_key=cerebras_key,
-            base_url="https://cerebras.cloud/api/v1",
-            model="llama-3.3-70b",
+            base_url="https://api.cerebras.ai/v1",
+            model="llama-3.3-70b",  # Fixed model name
             retry_attempts=2
+        )
+        
+        # SamuraiAPI configuration - Optimized for rate limits
+        samurai_key = os.getenv("SAMURAI_API_KEY", "")
+        self.configs[ApiProvider.SAMURAI_API] = ApiConfig(
+            enabled=bool(samurai_key),
+            api_key=samurai_key,
+            base_url="https://samuraiapi.in/v1",
+            model="gpt-4o-mini(clinesp)",  # Use correct SamuraiAPI model name
+            retry_attempts=1,  # Reduce retries due to rate limits
+            timeout=60
         )
         
         # Set the initial provider preference order
@@ -79,22 +102,29 @@ class APIManager:
     
     def _set_current_provider(self) -> None:
         """Set the current provider based on availability."""
-        # Priority order: OpenRouter -> Google AI -> Cerebras
-        for provider in [ApiProvider.OPENROUTER, ApiProvider.GOOGLE_AI, ApiProvider.CEREBRAS]:
+        # Priority order: SamuraiAPI FIRST, then others
+        for provider in [ApiProvider.SAMURAI_API, ApiProvider.GPT4ALL, ApiProvider.OPENROUTER, ApiProvider.GOOGLE_AI, ApiProvider.CEREBRAS]:
             if self.configs[provider].is_configured:
                 self._current_provider = provider
+                logger.info(f"Set primary API provider to: {provider.value}")
                 return
         
-        # If no providers are configured, default to OpenRouter but log a warning
-        self._current_provider = ApiProvider.OPENROUTER
-        logger.warning("No API providers are properly configured. Default to OpenRouter but it may not work.")
+        # If no providers are configured, default to GPT4All but log a warning
+        self._current_provider = ApiProvider.GPT4ALL
+        logger.warning("No API providers are properly configured. Default to GPT4All but it may not work.")
     
     def _get_client(self, provider: ApiProvider) -> Any:
         """Get or create an API client for the specified provider."""
         if provider not in self._clients:
             config = self.configs[provider]
             
-            if provider == ApiProvider.OPENROUTER:
+            if provider == ApiProvider.GPT4ALL:
+                # GPT4All uses OpenAI-compatible API
+                self._clients[provider] = OpenAI(
+                    base_url=config.base_url,
+                    api_key=config.api_key
+                )
+            elif provider == ApiProvider.OPENROUTER:
                 self._clients[provider] = OpenAI(
                     base_url=config.base_url,
                     api_key=config.api_key
@@ -104,6 +134,12 @@ class APIManager:
                 self._clients[provider] = httpx.AsyncClient(timeout=config.timeout)
             elif provider == ApiProvider.CEREBRAS:
                 # For Cerebras, we'll use the OpenAI client with their API endpoint
+                self._clients[provider] = OpenAI(
+                    base_url=config.base_url,
+                    api_key=config.api_key
+                )
+            elif provider == ApiProvider.SAMURAI_API:
+                # SamuraiAPI uses OpenAI-compatible API
                 self._clients[provider] = OpenAI(
                     base_url=config.base_url,
                     api_key=config.api_key
@@ -142,6 +178,11 @@ class APIManager:
             if not config.is_configured:
                 continue
             
+            # Skip providers that don't support function calling properly
+            if tools and provider in [ApiProvider.GPT4ALL]:
+                logger.info(f"Skipping {provider.value} for function calling - not supported")
+                continue
+            
             for attempt in range(config.retry_attempts):
                 try:
                     logger.info(f"Trying provider: {provider.value}, attempt {attempt+1}/{config.retry_attempts}")
@@ -163,22 +204,91 @@ class APIManager:
                     # Small delay before retry or next provider
                     await asyncio.sleep(1)
         
-        # If all providers failed, raise an exception
-        raise Exception(f"All API providers failed. Last error: {last_error}")
+        # If all providers failed, use simple fallback
+        logger.warning("All API providers failed, using simple fallback AI")
+        try:
+            from simple_fallback import SimpleFallbackAI
+            fallback_ai = SimpleFallbackAI()
+            # Extract guild_id from user_prompt if it contains function calls
+            guild_id = None
+            if "guild_id" in user_prompt:
+                import re
+                match = re.search(r'guild_id["\s:=]+(\d+)', user_prompt)
+                if match:
+                    guild_id = int(match.group(1))
+            
+            result = fallback_ai.process_command(user_prompt, guild_id)
+            result["provider"] = "simple_fallback"
+            return result
+        except Exception as e:
+            logger.error(f"Simple fallback AI also failed: {e}")
+            raise Exception(f"All API providers failed. Last error: {last_error}")
     
     async def _make_api_call(self, provider: ApiProvider, system_prompt: str, user_prompt: str, tools: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make an API call to the specified provider."""
         config = self.configs[provider]
         client = self._get_client(provider)
         
-        if provider == ApiProvider.OPENROUTER:
+        if provider == ApiProvider.GPT4ALL:
+            return await self._call_gpt4all(client, config, system_prompt, user_prompt, tools)
+        elif provider == ApiProvider.OPENROUTER:
             return await self._call_openrouter(client, config, system_prompt, user_prompt, tools)
         elif provider == ApiProvider.GOOGLE_AI:
             return await self._call_google_ai(client, config, system_prompt, user_prompt, tools)
         elif provider == ApiProvider.CEREBRAS:
             return await self._call_cerebras(client, config, system_prompt, user_prompt, tools)
+        elif provider == ApiProvider.SAMURAI_API:
+            return await self._call_samurai_api(client, config, system_prompt, user_prompt, tools)
         else:
             raise ValueError(f"Unknown provider: {provider}")
+    
+    async def _call_gpt4all(self, client, config: ApiConfig, system_prompt: str, user_prompt: str, tools: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Call the GPT4All API."""
+        try:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            kwargs = {
+                "model": "gpt-4o-mini",  # Use recommended model from documentation
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 4096
+            }
+            
+            # GPT4All may not support function calling properly, so we skip tools
+            # The fallback detection system will handle function calls
+            
+            response = client.chat.completions.create(**kwargs)
+            
+            # Handle different response formats
+            if hasattr(response, 'choices') and response.choices:
+                message = response.choices[0].message
+                content = message.content or ""
+            elif hasattr(response, 'content'):
+                content = response.content
+            else:
+                content = str(response)
+            
+            # Check if response is HTML (error page)
+            if content.startswith('<!DOCTYPE html>') or content.startswith('<html'):
+                raise Exception("API returned HTML instead of JSON response - possible authentication or endpoint issue")
+            
+            result = {
+                "content": content,
+                "tool_calls": [],
+                "provider": "gpt4all"
+            }
+            
+            # GPT4All doesn't support function calling reliably, so we don't check for tool calls
+            # The AI agent will use fallback detection instead
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"GPT4All API error: {e}")
+            raise Exception(f"GPT4All API error: {str(e)}")
     
     async def _call_openrouter(self, client, config: ApiConfig, system_prompt: str, user_prompt: str, tools: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Call the OpenRouter API."""
@@ -268,12 +378,16 @@ class APIManager:
         
         if google_tools:
             request_data["tools"] = google_tools
+            request_data["toolConfig"] = {
+                "functionCallingConfig": {
+                    "mode": "AUTO"
+                }
+            }
         
         # Make the API call
-        async with client as session:
-            response = await session.post(api_url, params=params, json=request_data)
-            response.raise_for_status()
-            data = response.json()
+        response = await client.post(api_url, params=params, json=request_data)
+        response.raise_for_status()
+        data = response.json()
         
         # Process the response
         result = {"content": "", "tool_calls": []}
@@ -345,6 +459,99 @@ class APIManager:
             result["tool_calls"] = tool_calls
         
         return result
+    
+    async def _call_samurai_api(self, client, config: ApiConfig, system_prompt: str, user_prompt: str, tools: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Call the SamuraiAPI with optimized model selection and rate limit handling."""
+        # Prioritize most reliable models based on actual SamuraiAPI availability
+        models_to_try = [
+            "gpt-4o-mini(clinesp)",           # Fast and reliable
+            "claude-3.5-haiku(clinesp)",      # Fast Claude model
+            "gpt-4o(clinesp)",                # Premium GPT-4o
+            "claude-3.5-sonnet(clinesp)",     # High quality Claude
+            "deepseek-chat(clinesp)",         # Alternative option
+            "gpt-4(clinesp)"                  # Fallback GPT-4
+        ]
+        
+        last_error = None
+        
+        for model in models_to_try:
+            try:
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+                
+                kwargs = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 2048  # Reduced to avoid rate limits
+                }
+                
+                if tools:
+                    kwargs["tools"] = tools
+                    kwargs["tool_choice"] = "auto"
+                
+                logger.info(f"SamuraiAPI request: model={model}")
+                
+                response = client.chat.completions.create(**kwargs)
+                
+                # Handle different response formats
+                if hasattr(response, 'choices') and response.choices:
+                    message = response.choices[0].message
+                    content = message.content or ""
+                elif hasattr(response, 'content'):
+                    content = response.content
+                else:
+                    content = str(response)
+                
+                # Check if response is HTML (error page)
+                if content.startswith('<!DOCTYPE html>') or content.startswith('<html'):
+                    raise Exception(f"SamuraiAPI returned HTML instead of JSON response for model {model}")
+                
+                result = {
+                    "content": content,
+                    "tool_calls": []
+                }
+                
+                # Check for tool calls
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    tool_calls = []
+                    for tool_call in message.tool_calls:
+                        try:
+                            args = json.loads(tool_call.function.arguments)
+                        except:
+                            args = {}
+                            
+                        tool_calls.append({
+                            "id": tool_call.id,
+                            "name": tool_call.function.name,
+                            "args": args
+                        })
+                    result["tool_calls"] = tool_calls
+                
+                logger.info(f"SamuraiAPI SUCCESS with model {model}")
+                return result
+                
+            except Exception as e:
+                error_str = str(e)
+                last_error = error_str
+                
+                # Check for rate limiting
+                if "429" in error_str or "请求数限制" in error_str:
+                    logger.warning(f"SamuraiAPI rate limited with model {model}, trying next model")
+                    continue
+                # Check for model unavailability
+                elif "503" in error_str or "无可用渠道" in error_str:
+                    logger.warning(f"SamuraiAPI model {model} unavailable, trying next model")
+                    continue
+                else:
+                    logger.warning(f"SamuraiAPI failed with model {model}: {e}")
+                    continue
+        
+        # If all models failed, raise the last error
+        logger.error(f"SamuraiAPI failed with all models. Last error: {last_error}")
+        raise Exception(f"SamuraiAPI rate limited or models unavailable: {last_error}")
     
     def get_last_errors(self) -> Dict[str, str]:
         """Get the most recent errors from each provider."""

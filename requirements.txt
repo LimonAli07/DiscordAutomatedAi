@@ -1,0 +1,71 @@
+# Discord AI Bot Requirements
+# Python >=3.11 required
+# Install with: pip install -r requirements.txt
+
+# Core Discord Bot Framework
+discord.py>=2.5.2
+
+# Web Framework (for keep-alive functionality)
+flask>=3.1.1
+
+# AI API Clients
+openai>=1.97.1                    # For OpenAI, OpenRouter, GPT4All, Cerebras APIs
+google-generativeai>=0.8.5        # For Google AI Studio API
+
+# HTTP Client for API requests
+httpx>=0.28.1
+
+# Data Validation and Parsing
+pydantic>=2.11.7
+
+# Required Dependencies (automatically installed with above packages)
+aiohttp>=3.7.4                   # Async HTTP client (required by discord.py)
+asyncio                          # Async programming (built-in Python 3.11+)
+typing-extensions>=4.2           # Extended type hints
+requests>=2.18.0                 # HTTP requests library
+certifi                          # SSL certificates
+urllib3>=1.21.1                  # HTTP library
+charset-normalizer>=2.0          # Character encoding detection
+idna>=2.0                        # Internationalized domain names
+click>=8.1.3                     # Command line interface creation
+jinja2>=3.1.2                    # Template engine
+markupsafe>=2.1.1                # Safe string handling
+werkzeug>=3.1.0                  # WSGI utilities
+blinker>=1.9.0                   # Signal/event system
+itsdangerous>=2.2.0              # Secure data serialization
+
+# AI API Dependencies
+google-auth>=2.15.0              # Google authentication
+google-api-core                  # Google API core library
+google-api-python-client         # Google API client
+protobuf                         # Protocol buffers
+grpcio>=1.33.2                   # gRPC framework
+anyio>=3.5.0                     # Async I/O
+sniffio                          # Async library detection
+tqdm>4                           # Progress bars
+distro>=1.7.0                    # Linux distribution detection
+jiter>=0.4.0                     # Fast JSON parsing
+
+# Built-in Python modules (no installation needed)
+# logging                         # Logging (built-in Python)
+# typing                          # Type hints (built-in Python 3.11+)
+# pathlib                         # Path handling (built-in Python)
+# json                            # JSON handling (built-in Python)
+# os                              # OS interface (built-in Python)
+# re                              # Regular expressions (built-in Python)
+# datetime                        # Date/time handling (built-in Python)
+# enum                            # Enumerations (built-in Python)
+# threading                       # Threading (built-in Python)
+# unittest.mock                   # Mocking for tests (built-in Python)
+
+# Optional: Development and Testing
+# pytest>=7.0.0                  # For running tests
+# black>=23.0.0                  # Code formatting
+# flake8>=6.0.0                  # Code linting
+# python-dotenv                   # Load .env files (optional)
+
+# Installation Notes:
+# 1. Run: pip install -r requirements.txt
+# 2. Ensure Python 3.11+ is installed
+# 3. Create .env file with your API keys
+# 4. Run: python main.py

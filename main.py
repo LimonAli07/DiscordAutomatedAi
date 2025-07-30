@@ -40,9 +40,12 @@ class DiscordBot(discord.Client):
         
     async def setup_hook(self):
         """Called when the client is done preparing data."""
-        # Register global slash commands
-        await self.tree.sync()
-        logger.info("Slash commands synced globally")
+        if self.tree is None:
+            logger.error("CommandTree is not initialized!")
+        else:
+            # Register global slash commands
+            await self.tree.sync()
+            logger.info("Slash commands synced globally")
     
     async def on_ready(self):
         """Called when the bot is ready."""
@@ -90,7 +93,7 @@ class DiscordBot(discord.Client):
             return
         
         # Only respond to the owner for legacy commands
-        if message.author.id != config.discord_owner_id:
+        if message.author.id != config.discord_owner_id and message.author.id not in config.command_whitelist:
             return
         
         # Check if the AI agent is initialized
@@ -121,6 +124,14 @@ class DiscordBot(discord.Client):
             # Extract the prompt from the message
             command_content = message.content[len(self.legacy_command_prefix):].strip()
             
+            # Only allow debug for owner
+            debug_mode = False
+            debug_prefix = "debug "
+            if command_content.lower().startswith(debug_prefix) and (
+                message.author.id == config.discord_owner_id or message.author.id in config.command_whitelist):
+                debug_mode = True
+                command_content = command_content[len(debug_prefix):]
+
             if not command_content:
                 await message.channel.send(
                     "Please provide a command after `¬askai`. "
@@ -138,7 +149,7 @@ class DiscordBot(discord.Client):
                 )
                 
                 # Process the command with AI
-                response = await self.ai_agent.process_command(message, command_content)
+                response = await self.ai_agent.process_command(message, command_content, debug=debug_mode)
                 
                 # Send the response
                 if len(response) > 2000:
@@ -241,46 +252,75 @@ async def main():
         async def askai(interaction: discord.Interaction, command: str):
             """Slash command for AI agent interaction."""
             try:
+                # Only allow debug for owner
+                debug_mode = False
+                debug_prefix = "debug "
+                if command.lower().startswith(debug_prefix) and interaction.user.id == config.discord_owner_id:
+                    debug_mode = True
+                    command = command[len(debug_prefix):]
+                
                 # Update user session to current guild
                 if interaction.guild:
                     bot.user_sessions[interaction.user.id] = interaction.guild.id
                 
                 # Check if the AI agent is initialized
                 if not bot.ai_agent:
-                    await interaction.response.send_message("AI agent not initialized. Please try again later.")
+                    await interaction.response.send_message("❌ AI agent not initialized. Please try again later.", ephemeral=True)
                     return
                 
-                # Defer response to allow for longer processing time
+                # Immediately defer the response to prevent timeout (3 second limit)
                 await interaction.response.defer(thinking=True)
                 
-                # Process the command with AI
-                response = await bot.ai_agent.process_command(interaction, command)
-                
-                # Send the response
-                if len(response) > 2000:
-                    # For longer responses, send follow-up messages
-                    chunks = [response[i:i+1900] for i in range(0, len(response), 1900)]
-                    first_chunk = True
-                    for chunk in chunks:
-                        if first_chunk:
-                            await interaction.followup.send(chunk)
-                            first_chunk = False
-                        else:
-                            await interaction.followup.send(f"(continued...)\n{chunk}")
-                else:
-                    await interaction.followup.send(response)
-            
+                # Process the command with AI in background with timeout protection
+                try:
+                    # Add timeout to prevent long-running operations from causing interaction expiry
+                    response = await asyncio.wait_for(
+                        bot.ai_agent.process_command(interaction, command, debug=debug_mode),
+                        timeout=840  # 14 minutes - leave 1 minute buffer before Discord's 15-minute limit
+                    )
+                    
+                    # Always use followup after defer - this never fails
+                    if len(response) > 2000:
+                        chunks = [response[i:i+1900] for i in range(0, len(response), 1900)]
+                        for i, chunk in enumerate(chunks):
+                            if i == 0:
+                                await interaction.followup.send(chunk)
+                            else:
+                                await interaction.followup.send(f"(continued...)\n{chunk}")
+                    else:
+                        await interaction.followup.send(response)
+                except asyncio.TimeoutError:
+                    logger.error(f"AI command processing timed out after 14 minutes")
+                    await interaction.followup.send(
+                        "⏰ **Command Timeout**\n\n"
+                        "Your command is taking longer than expected to process. This might be due to:\n"
+                        "• Complex operations requiring multiple API calls\n"
+                        "• AI provider experiencing delays\n"
+                        "• Network connectivity issues\n\n"
+                        "**Please try:**\n"
+                        "1. Breaking complex requests into smaller commands\n"
+                        "2. Trying again in a few minutes\n"
+                        "3. Using simpler command syntax"
+                    )
+                except Exception as process_error:
+                    logger.error(f"Error processing AI command: {process_error}")
+                    await interaction.followup.send(f"❌ Error processing command: {str(process_error)}")
+                    
+            except discord.NotFound as e:
+                logger.error(f"Discord interaction not found (404): {e}")
+                # Interaction expired - can't respond
+                return
+            except discord.InteractionResponded as e:
+                logger.error(f"Interaction already responded to: {e}")
+                # This shouldn't happen with proper defer/followup pattern
+                return
             except Exception as e:
                 logger.error(f"Error processing slash command: {e}")
-                # Make sure we respond even if there's an error
+                # Always use followup after defer
                 try:
                     await interaction.followup.send(f"❌ An error occurred: {str(e)}")
-                except:
-                    # If followup fails, try response
-                    try:
-                        await interaction.response.send_message(f"❌ An error occurred: {str(e)}")
-                    except:
-                        logger.error("Failed to send error response")
+                except Exception as followup_error:
+                    logger.error(f"Failed to send error response: {followup_error}")
         
         # Command to delete a category and all its channels
         @bot.tree.command(name="deletecategory", description="Delete a category and all its channels")
@@ -289,15 +329,15 @@ async def main():
         )
         async def delete_category(interaction: discord.Interaction, category: str):
             """Delete a category and all its channels."""
-            # Check if user has administrator permissions
-            if not interaction.user.guild_permissions.administrator and interaction.user.id != config.discord_owner_id:
-                await interaction.response.send_message("❌ You need administrator permissions to use this command.")
-                return
-            
-            # Defer response to allow time for processing
-            await interaction.response.defer(thinking=True)
-            
             try:
+                # Check if user has administrator permissions
+                if not interaction.user.guild_permissions.administrator and interaction.user.id != config.discord_owner_id:
+                    await interaction.response.send_message("❌ You need administrator permissions to use this command.", ephemeral=True)
+                    return
+                
+                # Defer response to allow time for processing
+                await interaction.response.defer()
+                
                 guild = interaction.guild
                 # Find the category
                 target_category = None
@@ -347,11 +387,21 @@ async def main():
                     'confirm_callback': execute_deletion
                 }
                 
-                # We don't need to wait for the reaction here since it's handled in on_reaction_add
-                
+            except discord.NotFound as e:
+                logger.error(f"Discord interaction not found (404): {e}")
+                return
+            except discord.InteractionResponded as e:
+                logger.error(f"Interaction already responded to: {e}")
+                return
             except Exception as e:
                 logger.error(f"Error in delete_category command: {e}")
-                await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+                    else:
+                        await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+                except Exception as followup_error:
+                    logger.error(f"Failed to send error response: {followup_error}")
         
         # Create role command
         @bot.tree.command(name="createrole", description="Create a new role in the server")
@@ -362,14 +412,14 @@ async def main():
         )
         async def create_role(interaction: discord.Interaction, name: str, color: Optional[str] = None, permissions: Optional[str] = None):
             """Create a new role with specified properties."""
-            # Check if user has manage_roles permission
-            if not interaction.user.guild_permissions.manage_roles and interaction.user.id != config.discord_owner_id:
-                await interaction.response.send_message("❌ You need 'Manage Roles' permission to use this command.")
-                return
-            
-            await interaction.response.defer(thinking=True)
-            
             try:
+                # Check if user has manage_roles permission
+                if not interaction.user.guild_permissions.manage_roles and interaction.user.id != config.discord_owner_id:
+                    await interaction.response.send_message("❌ You need 'Manage Roles' permission to use this command.", ephemeral=True)
+                    return
+                
+                await interaction.response.defer()
+                
                 guild = interaction.guild
                 
                 # Parse permissions if provided
@@ -389,9 +439,21 @@ async def main():
                 else:
                     await interaction.followup.send("❌ Bot services are not fully initialized. Please try again later.")
                 
+            except discord.NotFound as e:
+                logger.error(f"Discord interaction not found (404): {e}")
+                return
+            except discord.InteractionResponded as e:
+                logger.error(f"Interaction already responded to: {e}")
+                return
             except Exception as e:
                 logger.error(f"Error in create_role command: {e}")
-                await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+                    else:
+                        await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+                except Exception as followup_error:
+                    logger.error(f"Failed to send error response: {followup_error}")
         
         # Run the bot
         await bot.start(config.discord_bot_token)

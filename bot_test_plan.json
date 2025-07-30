@@ -1,0 +1,377 @@
+{
+  "test_session": {
+    "timestamp": "2025-07-28T23:46:28.305505",
+    "total_tests": 46,
+    "categories": 11
+  },
+  "results": [
+    {
+      "timestamp": "2025-07-28T23:46:28.291503",
+      "category": "Basic Functionality",
+      "command": "/askai get_api_status",
+      "description": "Test command 1/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.291503",
+      "category": "Basic Functionality",
+      "command": "/askai help",
+      "description": "Test command 2/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.292687",
+      "category": "Basic Functionality",
+      "command": "/askai list_channels",
+      "description": "Test command 3/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.292687",
+      "category": "Basic Functionality",
+      "command": "/askai get_server_stats",
+      "description": "Test command 4/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.292687",
+      "category": "Channel Management",
+      "command": "/askai list_channels",
+      "description": "Test command 1/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai create_channel test-channel text",
+      "description": "Test command 2/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai create_channel test-voice voice",
+      "description": "Test command 3/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai create_channel test-category category",
+      "description": "Test command 4/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai create_channel test-in-category text test-category",
+      "description": "Test command 5/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai set_slowmode test-channel 5",
+      "description": "Test command 6/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai lock_channel test-channel",
+      "description": "Test command 7/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.293695",
+      "category": "Channel Management",
+      "command": "/askai unlock_channel test-channel",
+      "description": "Test command 8/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.295186",
+      "category": "Channel Management",
+      "command": "/askai set_slowmode test-channel 0",
+      "description": "Test command 9/9",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.295186",
+      "category": "Role Management",
+      "command": "/askai list_roles",
+      "description": "Test command 1/5",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.295186",
+      "category": "Role Management",
+      "command": "/askai create_role TestRole #FF0000 send_messages,read_messages",
+      "description": "Test command 2/5",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.295186",
+      "category": "Role Management",
+      "command": "/askai create_role ModeratorRole #00FF00 kick_members,ban_members",
+      "description": "Test command 3/5",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.295186",
+      "category": "Role Management",
+      "command": "/askai assign_role @username TestRole",
+      "description": "Test command 4/5",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.295186",
+      "category": "Role Management",
+      "command": "/askai remove_role @username TestRole",
+      "description": "Test command 5/5",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.296398",
+      "category": "Server Management",
+      "command": "/askai get_server_stats",
+      "description": "Test command 1/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.296398",
+      "category": "Server Management",
+      "command": "/askai backup_server",
+      "description": "Test command 2/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.296398",
+      "category": "Server Management",
+      "command": "/askai setup_auto_role TestRole",
+      "description": "Test command 3/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.296398",
+      "category": "Server Management",
+      "command": "/askai setup_welcome_message general Welcome {user} to {server}! We now have {count} members!",
+      "description": "Test command 4/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.296398",
+      "category": "Utility Commands",
+      "command": "/askai set_reminder general Test reminder +5m",
+      "description": "Test command 1/3",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.297560",
+      "category": "Utility Commands",
+      "command": "/askai schedule_event Test Event This is a test event +1h general",
+      "description": "Test command 2/3",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.297560",
+      "category": "Utility Commands",
+      "command": "/askai create_poll general What's your favorite color? Red,Blue,Green,Yellow 60",
+      "description": "Test command 3/3",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.297560",
+      "category": "Moderation (Safe)",
+      "command": "/askai timeout_member @username 10 Testing timeout",
+      "description": "Test command 1/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.298645",
+      "category": "Moderation (Safe)",
+      "command": "/askai remove_timeout @username",
+      "description": "Test command 2/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.298645",
+      "category": "Moderation (Safe)",
+      "command": "/askai set_nickname @username NewNickname",
+      "description": "Test command 3/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.298645",
+      "category": "Moderation (Safe)",
+      "command": "/askai set_nickname @username",
+      "description": "Test command 4/4",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.299669",
+      "category": "Moderation Tools",
+      "command": "/askai setup_word_filter badword1,badword2 delete",
+      "description": "Test command 1/3",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.299669",
+      "category": "Moderation Tools",
+      "command": "/askai setup_anti_spam 5 3 timeout",
+      "description": "Test command 2/3",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.299669",
+      "category": "Moderation Tools",
+      "command": "/askai track_member_activity general",
+      "description": "Test command 3/3",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.300703",
+      "category": "Message Management",
+      "command": "/askai purge_messages test-channel 5",
+      "description": "Test command 1/2",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.300703",
+      "category": "Message Management",
+      "command": "/askai purge_messages test-channel 3 @username",
+      "description": "Test command 2/2",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.300703",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai delete_channel test-channel",
+      "description": "Test command 1/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.300703",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai delete_role TestRole",
+      "description": "Test command 2/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.301804",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai kick_member @username Testing kick",
+      "description": "Test command 3/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.301804",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai ban_member @username Testing ban 1",
+      "description": "Test command 4/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.301804",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai unban_member username",
+      "description": "Test command 5/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.301804",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai delete_category_and_channels test-category",
+      "description": "Test command 6/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.302814",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/deletecategory test-category",
+      "description": "Test command 7/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.302814",
+      "category": "Dangerous Operations (Confirmation Required)",
+      "command": "/askai restore_server",
+      "description": "Test command 8/8",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.302814",
+      "category": "Advanced Features",
+      "command": "/askai update_role_permissions ModeratorRole manage_messages,manage_channels",
+      "description": "Test command 1/2",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.302814",
+      "category": "Advanced Features",
+      "command": "/createrole AdvancedRole #FFFF00 administrator",
+      "description": "Test command 2/2",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.302814",
+      "category": "Debug Commands (Owner Only)",
+      "command": "/askai debug get_api_status",
+      "description": "Test command 1/2",
+      "status": "READY",
+      "notes": "Manual execution required"
+    },
+    {
+      "timestamp": "2025-07-28T23:46:28.304130",
+      "category": "Debug Commands (Owner Only)",
+      "command": "/askai debug list_channels",
+      "description": "Test command 2/2",
+      "status": "READY",
+      "notes": "Manual execution required"
+    }
+  ]
+}
