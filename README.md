@@ -1,6 +1,9 @@
 # ProjectChronosBot
 
+
 ProjectChronosBot is an advanced AI-powered Discord bot designed to streamline server management, enhance moderation, and engage communities with intelligent features. It leverages natural language understanding and slash commands to provide a seamless and powerful user experience.
+
+**Note:** This project does not include any built-in API providers (such as OpenAI, GPT4All, Samurai, etc). You must add your own API provider(s) and keys in your `.env` file and code as needed. Please refer to the documentation for integration instructions.
 
 ## 🚀 Features
 
@@ -64,9 +67,10 @@ ProjectChronosBot is an advanced AI-powered Discord bot designed to streamline s
 - Live and simulated test environments
 - Validation scripts for schema and API integration
 
+
 ## 🛠️ Setup & Hosting
 
-- `.env` configuration for secure token and API keys
+- `.env` configuration for secure token and your own API keys (no API keys or providers are included by default)
 - `keep_alive.py` for persistent hosting (e.g., Replit)
 - Hosting guide included in `KEEP_ALIVE_AND_HOSTING_GUIDE.md`
 
