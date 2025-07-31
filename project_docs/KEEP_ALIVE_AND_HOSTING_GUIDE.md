@@ -157,19 +157,18 @@ Your bot includes a built-in keep-alive server (`keep_alive.py`) that:
 
 ### Required Variables:
 
+
 ```env
 DISCORD_BOT_TOKEN=your_discord_bot_token
 DISCORD_OWNER_ID=your_discord_user_id
-SAMURAI_API_KEY=your_samurai_api_key
-GPT4ALL_API_KEY=your_gpt4all_api_key
 ```
 
 ### Optional Variables:
 
+
 ```env
 OPENAI_API_KEY=your_openai_key
 GOOGLE_AI_KEY=your_google_ai_key
-CEREBRAS_API_KEY=your_cerebras_key
 DEBUG_MODE=false
 SESSION_SECRET=random_secret_string
 ```

@@ -23,11 +23,8 @@ class Config:
         self.discord_owner_id = os.getenv("DISCORD_OWNER_ID")
         
         # API keys
-        self.gpt4all_api_key = os.getenv("GPT4ALL_API_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
         self.google_ai_key = os.getenv("GOOGLE_AI_KEY")
-        self.cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
-        self.samurai_api_key = os.getenv("SAMURAI_API_KEY")
         self.command_whitelist = [
             int(uid) for uid in os.getenv("COMMAND_WHITELIST", "").split(",") if uid.strip().isdigit()
         ]
@@ -46,8 +43,8 @@ class Config:
             missing_vars.append("DISCORD_OWNER_ID")
         
         # At least one API key is required
-        if not any([self.gpt4all_api_key, self.openai_api_key, self.google_ai_key, self.cerebras_api_key, self.samurai_api_key]):
-            missing_vars.append("GPT4ALL_API_KEY or OPENAI_API_KEY (or OPENROUTER_API_KEY) or GOOGLE_AI_KEY or CEREBRAS_API_KEY or SAMURAI_API_KEY")
+        if not any([self.openai_api_key, self.google_ai_key]):
+            missing_vars.append("OPENAI_API_KEY (or OPENROUTER_API_KEY) or GOOGLE_AI_KEY")
         
         if missing_vars:
             logging.warning(f"Missing environment variables: {', '.join(missing_vars)}")
@@ -67,18 +64,15 @@ class Config:
         return all([
             self.discord_bot_token,
             self.discord_owner_id,
-            any([self.gpt4all_api_key, self.openai_api_key, self.google_ai_key, self.cerebras_api_key, self.samurai_api_key])
+            any([self.openai_api_key, self.google_ai_key])
         ])
     
     @property
     def api_keys(self):
         """Return a dictionary of available API keys."""
         return {
-            "gpt4all": self.gpt4all_api_key,
             "openai": self.openai_api_key,
             "google_ai": self.google_ai_key,
-            "cerebras": self.cerebras_api_key,
-            "samurai_api": self.samurai_api_key
         }
 
 # Global config instance

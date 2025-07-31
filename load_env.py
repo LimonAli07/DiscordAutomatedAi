@@ -76,10 +76,8 @@ def check_required_vars():
     }
     
     api_keys = {
-        'GPT4ALL_API_KEY': 'GPT4All API key',
-        'OPENAI_API_KEY': 'OpenAI/OpenRouter API key', 
-        'GOOGLE_AI_KEY': 'Google AI Studio API key',
-        'CEREBRAS_API_KEY': 'Cerebras API key'
+        'OPENAI_API_KEY': 'OpenAI/OpenRouter API key',
+        'GOOGLE_AI_KEY': 'Google AI Studio API key'
     }
     
     missing_required = []
